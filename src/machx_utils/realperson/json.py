@@ -4,7 +4,7 @@ import json
 from tqdm import tqdm
 
 
-class RealPersonJson:
+class Json:
     def __init__(self, dirname, datasetname, subdataset) -> None:
         self._dirname = dirname  
         self._datasetname = datasetname
