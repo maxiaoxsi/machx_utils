@@ -28,7 +28,9 @@ class Json:
 
 
     def get_dirname(self, tgtdir):
-        if tgtdir not in self._json["info"]:
+        if tgtdir == "annot":
+            dirname_tgt = "annot"
+        elif tgtdir not in self._json["info"]:
             dirname_tgt = tgtdir
         else:
             dirname_tgt = self._json["info"][tgtdir]
@@ -45,10 +47,12 @@ class Json:
 
 
     def load_json(self):
-        if not os.path.exists(self._jsonpath):
+        jsonpath = self.get_dirname("annot") + ".json"
+        if not os.path.exists(jsonpath):
+            self._json = None
             print("json file not exists!")
             return
-        with open(self._jsonpath, 'r', encoding='utf-8') as f:
+        with open(jsonpath, 'r', encoding='utf-8') as f:
             self._json = json.load(f)
         
         
@@ -65,26 +69,56 @@ class Json:
     def get_categories(self, key_parent):
         return [item["name"] for item in self._json["categories"] if item["supercategory"] == key_parent]
         
-    
 
 
 class RealPersonJson(Json):
     def __init__(self, dirname, subdataset) -> None:
         super().__init__(dirname, subdataset)
+        self.load_json()
 
 
     def load_json(self):
-        super().load_json()
+        jsonpath = self.get_dirname("annot") + ".json"
+        if not os.path.exists(jsonpath):
+            self._json = None
+            print("json file not exists!")
+            return
+        with open(jsonpath, 'r', encoding='utf-8') as f:
+            self._json = json.load(f)
+        if not self._json:
+            return
+        # print(self.get_categories("-1"))
+        # print(self.len_categories("-1"))
+        # print(len(self.get_categories("-1")))
         self._person = {}
         for item in self._json['images']:
             personid = item['personid']
-            imageid = item['id']
+            imgid = item['id']
             if personid not in self._person:
-                self._person[personid] = [imageid]
-                print(personid)
-                print(imageid)
+                self._person[personid] = {imgid: []}
             else:
-                self._person[personid].append(imageid)
+                self._person[personid][imgid] = []
+        
+        for item in self._json['annotations']:
+            skeleton = item["skeleton"]
+            render = item["render"]
+            imgid = item["id"]
+            annotid = item["id"]
+            if render != "-1" or skeleton != "-1":
+                personid = self.get_image(imgid)["personid"]
+                self._person[personid][imgid].append(annotid)
+        
+                
+
+    def get_image(self, imgid):
+        if not self._json:
+            return None
+        return self._json["images"][imgid]
+
+    def get_annot(self, annotid):
+        if not self._json:
+            return None
+        return self._json["annotations"][annotid]
 
 
     def check_ext(self, filename):
@@ -113,6 +147,7 @@ class RealPersonJson(Json):
         process_method(data_batch)
 
 
+
 class RealPersonJsonInitializer(RealPersonJson):
     def __init__(
         self, 
@@ -122,14 +157,15 @@ class RealPersonJsonInitializer(RealPersonJson):
         path_reid="image",
         path_skeleton="skeleton",
         path_render="render",
-        path_smplx="smplx"
+        path_smplx="smplx",
+        path_clipreid="clipreid"
     ) -> None:
         self._dirname = dirname
         self._subdataset = subdataset
-        self._init_json(year, path_reid, path_skeleton, path_render, path_smplx)
+        self._init_json(year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid)
 
 
-    def _init_json(self, year, path_reid, path_skeleton, path_render, path_smplx):
+    def _init_json(self, year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid):
         self._json = {
             "info": {
                 "year": year,
@@ -139,7 +175,8 @@ class RealPersonJsonInitializer(RealPersonJson):
                 "reid": path_reid,
                 "skeleton": path_skeleton,
                 "render": path_render,
-                "smplx": path_smplx 
+                "smplx": path_smplx,
+                "clipreid": path_clipreid
             },
             "licenses": [],
             "images": [],
@@ -179,6 +216,8 @@ class RealPersonJsonInitializer(RealPersonJson):
             path_render = self.get_path("render", image['filename'])
             path_smplx = self.get_path("smplx", image['filename'])
             path_smplx = path_smplx.replace(path_smplx.split('.')[-1], 'npz')
+            path_clipreid=self.get_path("clipreid", image['filename'])
+            path_clipreid = path_clipreid.replace(path_smplx.split('.')[-1], 'npz')
             item = {}
             item["id"] = id
             if not os.path.exists(path_skeleton):
@@ -196,6 +235,13 @@ class RealPersonJsonInitializer(RealPersonJson):
             else:
                 dir_smplx = self.get_dirname("smplx")
                 item["smplx"] = path_smplx[len(dir_smplx) + 1:]
+
+            if not os.path.exists(path_clipreid):
+                item["clipreid"] = "-1"
+            else:
+                dir_clipreid = self.get_dirname("clipreid")
+                item["clipreid"] = path_smplx[len(dir_clipreid) + 1:]
+
             id = id + 1
             self._json["annotations"].append(item)
 
@@ -224,15 +270,15 @@ class RealPersonJsonInitializer(RealPersonJson):
             if os.path.exists(path_smplx):
                 from machx_utils.smplx import SmplxPara
                 smplxpara = SmplxPara(smplxpara=path_smplx)
-                direction, vector_direction, mark_direction = smplxpara.init_drn()
+                direction, vec_drn, mark_drn = smplxpara.init_drn()
                 annot["drn"] = direction
-                annot["vec_drn"] = vector_direction
-                annot["mark_drn"] = mark_direction
+                annot["vec_drn"] = vec_drn
+                annot["mark_drn"] = mark_drn
 
     
     def traverse_images(self, dirname):
         images = []
-                
+         
         if not os.path.exists(dirname):
             print(f"{dirname} not exists, json file not created!")
             exit()

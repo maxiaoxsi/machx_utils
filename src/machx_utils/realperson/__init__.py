@@ -1,1 +1,1 @@
-from .json import RealPersonJsonInitializer
+from .json import RealPersonJsonInitializer, RealPersonJson
