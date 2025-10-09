@@ -1,5 +1,6 @@
 import os
 import json
+from unicodedata import category
 from tqdm import tqdm
 from PIL import Image
 
@@ -68,7 +69,21 @@ class Json:
 
     def get_categories(self, key_parent):
         return [item["name"] for item in self._json["categories"] if item["supercategory"] == key_parent]
+
+    def get_supercategory(self, id, is_annot = False, is_category = False):
+        if is_annot:
+            id = self._json["annotations"][id]["category_id"]
+        while self._json["categories"][id]["supercategory"] != "-1":
+            id = self._json["categories"][id]["supercategory"]
+        return id
         
+
+    def get_category(self, id, is_category = False, is_annot = False):
+        if is_category:
+            return self._json["categories"][id]
+
+
+         
 
 
 class RealPersonJson(Json):
@@ -78,13 +93,7 @@ class RealPersonJson(Json):
 
 
     def load_json(self):
-        jsonpath = self.get_dirname("annot") + ".json"
-        if not os.path.exists(jsonpath):
-            self._json = None
-            print("json file not exists!")
-            return
-        with open(jsonpath, 'r', encoding='utf-8') as f:
-            self._json = json.load(f)
+        super().load_json()
         if not self._json:
             return
         # print(self.get_categories("-1"))
@@ -109,11 +118,11 @@ class RealPersonJson(Json):
                 self._person[personid][imgid].append(annotid)
         
                 
-
     def get_image(self, imgid):
         if not self._json:
             return None
         return self._json["images"][imgid]
+
 
     def get_annot(self, annotid):
         if not self._json:
@@ -130,6 +139,18 @@ class RealPersonJson(Json):
         if not self._json:
             self.load_json()
         print(self._json["images"][i])
+
+
+    def get_item(
+        self,
+        id_person, 
+        id_frame, 
+        id_img,
+        is_select_bernl,
+        is_select_repeat,
+        rate_mask_aug
+    ):
+        pass
 
 
     def process_batch(self, process_method, tgtdir, batch_size):
@@ -185,9 +206,8 @@ class RealPersonJsonInitializer(RealPersonJson):
             "annotations": []
         }
         self._init_images()
-        self._init_categories()
         self._init_annot()
-        self._init_drn()
+        self._init_categories()
         self.save_json()
 
 
@@ -242,17 +262,25 @@ class RealPersonJsonInitializer(RealPersonJson):
                 dir_clipreid = self.get_dirname("clipreid")
                 item["clipreid"] = path_smplx[len(dir_clipreid) + 1:]
 
+            if os.path.exists(path_smplx):
+                from machx_utils.smplx import SmplxPara
+                smplxpara = SmplxPara(smplxpara=path_smplx)
+                drn, _, mark_drn = smplxpara.init_drn()
+                item["drn"] = drn 
+                item["mark_drn"] = mark_drn
             id = id + 1
             self._json["annotations"].append(item)
-
+        
 
     def _init_categories(self):
-        list_personid = []
+        dict_personid = {}
+        dict_categories = {}
         id = 0
         for image in self._json['images']:
             personid = image['personid']
-            if personid not in list_personid:
-                list_personid.append(personid)
+            imageid = image['id']
+            if personid not in dict_personid:
+                dict_personid[personid] = id
                 item = {
                     "id": id,
                     "name": personid,
@@ -260,22 +288,37 @@ class RealPersonJsonInitializer(RealPersonJson):
                 }
                 self._json["categories"].append(item)
                 id = id + 1
+        
+        for image in self._json['images']:
+            personid = image['personid']
+            imageid = image['id']
+            if "drn" not in self._json['annotations'][imageid]:
+                continue
+            drn = self._json['annotations'][imageid]['drn']
+            personid_wtdrn = f"{personid}_{drn}"
+            supercategory = dict_personid[personid]
+            if personid_wtdrn not in dict_personid:
+                dict_personid[personid_wtdrn] = id
+                item = {
+                    "id": id,
+                    "name": personid_wtdrn,
+                    "supercategory": supercategory
+                }
+                self._json["categories"].append(item)
+                id = id + 1
+            self._json["annotations"][imageid]["category_id"] = dict_personid[personid_wtdrn]
 
+        for annot in self._json['annotations']:
+            print(annot)
+            categoryid = annot["category_id"]
+            print(categoryid)
+            categoryid = self.get_supercategory(categoryid)
+            if categoryid not in dict_categories:
+                dict_categories[categoryid] = []
+            dict_categories[categoryid].append(annot["id"])
+        print(dict_categories)
+        
 
-    def _init_drn(self):
-        for item in self._json["images"]:
-            itemid = item["id"]
-            annot = self._json["annotations"][itemid]
-            path_smplx = self.get_path("smplx", annot["smplx"])
-            if os.path.exists(path_smplx):
-                from machx_utils.smplx import SmplxPara
-                smplxpara = SmplxPara(smplxpara=path_smplx)
-                direction, vec_drn, mark_drn = smplxpara.init_drn()
-                annot["drn"] = direction
-                annot["vec_drn"] = vec_drn
-                annot["mark_drn"] = mark_drn
-
-    
     def traverse_images(self, dirname):
         images = []
          
