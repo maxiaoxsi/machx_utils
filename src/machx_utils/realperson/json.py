@@ -144,6 +144,13 @@ class RealPersonJson(Json):
         fea_clipreid = np.load(path_clipreid)
         return fea_clipreid
 
+    def get_score_clipreid(self, fea1_clipreid, fea2_clipreid):
+        # 确保向量是一维的
+        fea1_clipreid = fea1_clipreid.flatten()
+        fea2_clipreid = fea2_clipreid.flatten()
+        # 计算余弦相似度
+        return np.dot(fea1_clipreid, fea2_clipreid) / (np.linalg.norm(fea1_clipreid) * np.linalg.norm(fea2_clipreid))
+
 
     def check_ext(self, filename):
         image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
@@ -338,11 +345,24 @@ class RealPersonJsonInitializer(RealPersonJson):
             categoryid = annot["category_id"]
             categoryid = self.get_supercategory(categoryid)
             annots = dict_categories[categoryid]
-            fea1_clipreid = self.get_clipreid(annot)
-            for annot_cm in annots:
-                fea2_clipreid =self.get_clipreid(annot_cm)
-                print(fea1_clipreid)
-                print(fea2_clipreid)
+            fea_query_clipreid = self.get_clipreid(annot)
+            annots_with_scores = []
+            for annot_gallery in annots:
+                fea_gallery_clipreid = self.get_clipreid(annot_gallery)
+                score = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
+                annots_with_scores.append((annot_gallery, score))
+
+            sorted_annots_with_scores = sorted(annots_with_scores, 
+                key=lambda x: x[1], 
+                reverse=True
+            )
+            sorted_annots = [item[0] for item in sorted_annots_with_scores]
+            for annot_gallery in sorted_annots:
+                fea_gallery_clipreid = self.get_clipreid(annot_gallery)
+                print(fea_query_clipreid)
+                print(fea_gallery_clipreid)
+                score_clipreid = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
+                print(score_clipreid)
                 exit()
                 
             
