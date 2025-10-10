@@ -1,15 +1,16 @@
+from ntpath import dirname
 import os
 import json
 from unicodedata import category
 from tqdm import tqdm
 from PIL import Image
+import numpy as np
 
 def get_image_info(image_path, filename):
     """获取图片的基本信息"""
-    if not 'market' in image_path.lower():
-        return
-    id_person = filename.split('_')[0]
-    id_camera = filename.split('_')[1].split('c')[1].split('s')[0]
+    if 'market' in image_path.lower():
+        id_person = filename.split('_')[0]
+        id_camera = filename.split('_')[1].split('c')[1].split('s')[0]
     if not id_person.isdigit() or int(id_person) < 1:
         return None, None, None, None
     try:
@@ -64,11 +65,14 @@ class Json:
             print(f"file saved in {jsonpath}_{version}")
             json.dump(self._json, f, indent=4)
 
+
     def len_categories(self, key_parent):
         return sum(1 for item in self._json["categories"] if item["supercategory"] == key_parent)
 
+
     def get_categories(self, key_parent):
         return [item["name"] for item in self._json["categories"] if item["supercategory"] == key_parent]
+
 
     def get_supercategory(self, id, is_annot = False, is_category = False):
         if is_annot:
@@ -82,8 +86,6 @@ class Json:
         if is_category:
             return self._json["categories"][id]
 
-
-         
 
 
 class RealPersonJson(Json):
@@ -104,9 +106,9 @@ class RealPersonJson(Json):
             personid = item['personid']
             imgid = item['id']
             if personid not in self._person:
-                self._person[personid] = {imgid: []}
+                self._person[personid] = {"imgid": [imgid]}
             else:
-                self._person[personid][imgid] = []
+                self._person[personid]["imgid"].append(imgid)
         
         for item in self._json['annotations']:
             skeleton = item["skeleton"]
@@ -128,6 +130,19 @@ class RealPersonJson(Json):
         if not self._json:
             return None
         return self._json["annotations"][annotid]
+
+
+    def get_clipreid(self, annot):
+        if isinstance(annot, int):
+            annot = self._json["annotations"][annot]
+        filename_clipreid = annot["clipreid"]
+        if filename_clipreid == "-1":
+            return None
+        path_clipreid = self.get_path("clipreid", filename_clipreid)
+        if not os.path.exists(path_clipreid):
+            return None
+        fea_clipreid = np.load(path_clipreid)
+        return fea_clipreid
 
 
     def check_ext(self, filename):
@@ -212,8 +227,8 @@ class RealPersonJsonInitializer(RealPersonJson):
 
 
     def _init_images(self):
-        path_dataset = self.get_dirname("reid")
-        images= self.traverse_images(path_dataset)
+        dirname = self.get_dirname("reid")
+        images= self.traverse_images(dirname)
         images.sort(key=lambda x: (int(x['personid']), int(x['camid']), x["filename"]))
         images_new = []
         for i, image in enumerate(images):
@@ -240,6 +255,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             path_clipreid = path_clipreid.replace(path_smplx.split('.')[-1], 'npz')
             item = {}
             item["id"] = id
+            item["imgid"] = image["id"]
             if not os.path.exists(path_skeleton):
                 item["skeleton"] = "-1"
             else:
@@ -274,7 +290,6 @@ class RealPersonJsonInitializer(RealPersonJson):
 
     def _init_categories(self):
         dict_personid = {}
-        dict_categories = {}
         id = 0
         for image in self._json['images']:
             personid = image['personid']
@@ -293,6 +308,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             personid = image['personid']
             imageid = image['id']
             if "drn" not in self._json['annotations'][imageid]:
+                self._json["annotations"][imageid]["category_id"] = dict_personid[personid]
                 continue
             drn = self._json['annotations'][imageid]['drn']
             personid_wtdrn = f"{personid}_{drn}"
@@ -308,16 +324,29 @@ class RealPersonJsonInitializer(RealPersonJson):
                 id = id + 1
             self._json["annotations"][imageid]["category_id"] = dict_personid[personid_wtdrn]
 
+        dict_categories = {}
+
         for annot in self._json['annotations']:
-            print(annot)
             categoryid = annot["category_id"]
-            print(categoryid)
             categoryid = self.get_supercategory(categoryid)
             if categoryid not in dict_categories:
-                dict_categories[categoryid] = []
-            dict_categories[categoryid].append(annot["id"])
-        print(dict_categories)
-        
+                dict_categories[categoryid] = [annot["id"]]
+            else:
+                dict_categories[categoryid].append(annot["id"])
+
+        for annot in self._json['annotations']:
+            categoryid = annot["category_id"]
+            categoryid = self.get_supercategory(categoryid)
+            annots = dict_categories[categoryid]
+            fea1_clipreid = self.get_clipreid(annot)
+            for annot_cm in annots:
+                fea2_clipreid =self.get_clipreid(annot_cm)
+                print(fea1_clipreid)
+                print(fea2_clipreid)
+                exit()
+                
+            
+            
 
     def traverse_images(self, dirname):
         images = []
