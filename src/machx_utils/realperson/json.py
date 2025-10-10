@@ -5,6 +5,7 @@ from unicodedata import category
 from tqdm import tqdm
 from PIL import Image
 import numpy as np
+import random
 
 def get_image_info(image_path, filename):
     """获取图片的基本信息"""
@@ -102,21 +103,19 @@ class RealPersonJson(Json):
         # print(self.len_categories("-1"))
         # print(len(self.get_categories("-1")))
         self._person = {}
-        for item in self._json['images']:
-            personid = item['personid']
-            imgid = item['id']
-            if personid not in self._person:
-                self._person[personid] = {"imgid": [imgid]}
-            else:
-                self._person[personid]["imgid"].append(imgid)
         
-        for item in self._json['annotations']:
-            skeleton = item["skeleton"]
-            render = item["render"]
-            imgid = item["id"]
-            annotid = item["id"]
+        for annot in self._json['annotations']:
+            skeleton = annot["skeleton"]
+            render = annot["render"]
+            imgid = annot["imgid"]
+            annotid = annot["id"]
             if render != "-1" or skeleton != "-1":
-                personid = self.get_image(imgid)["personid"]
+                image = self.get_image(imgid)
+                personid = image["personid"]
+                if personid not in self._person:
+                    self._person[personid] = {}
+                if imgid not in self._person[personid]:
+                    self._person[personid][imgid] = []
                 self._person[personid][imgid].append(annotid)
         
                 
@@ -144,8 +143,11 @@ class RealPersonJson(Json):
         fea_clipreid = np.load(path_clipreid)
         return fea_clipreid
 
+
     def get_score_clipreid(self, fea1_clipreid, fea2_clipreid):
         # 确保向量是一维的
+        if fea1_clipreid is None or fea2_clipreid is None:
+            return -1
         fea1_clipreid = fea1_clipreid.flatten()
         fea2_clipreid = fea2_clipreid.flatten()
         # 计算余弦相似度
@@ -172,8 +174,11 @@ class RealPersonJson(Json):
         is_select_repeat,
         rate_mask_aug
     ):
-        pass
-
+        person = self._person[id_person]
+        if id_img != "-1":
+            id_img = random.randint(0, len(person) - 1)
+        annot = person[id_img][0]
+        
 
     def process_batch(self, process_method, tgtdir, batch_size):
         data_batch = {
@@ -259,7 +264,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             path_smplx = self.get_path("smplx", image['filename'])
             path_smplx = path_smplx.replace(path_smplx.split('.')[-1], 'npz')
             path_clipreid=self.get_path("clipreid", image['filename'])
-            path_clipreid = path_clipreid.replace(path_smplx.split('.')[-1], 'npz')
+            path_clipreid = path_clipreid.replace(path_clipreid.split('.')[-1], 'npy')
             item = {}
             item["id"] = id
             item["imgid"] = image["id"]
@@ -268,24 +273,24 @@ class RealPersonJsonInitializer(RealPersonJson):
             else:
                 dir_skeleton = self.get_dirname("skeleton")
                 item["skeleton"] = path_skeleton[len(dir_skeleton) + 1:]
+            
             if not os.path.exists(path_render):
                 item["render"] = "-1"
             else:
                 dir_render = self.get_dirname("render")
                 item["render"] = path_render[len(dir_render) + 1:]
+            
+            if not os.path.exists(path_clipreid):
+                item["clipreid"] = "-1"
+            else:
+                dir_clipreid = self.get_dirname("clipreid")
+                item["clipreid"] = path_clipreid[len(dir_clipreid) + 1:]
+            
             if not os.path.exists(path_smplx):
                 item["smplx"] = "-1"
             else:
                 dir_smplx = self.get_dirname("smplx")
                 item["smplx"] = path_smplx[len(dir_smplx) + 1:]
-
-            if not os.path.exists(path_clipreid):
-                item["clipreid"] = "-1"
-            else:
-                dir_clipreid = self.get_dirname("clipreid")
-                item["clipreid"] = path_smplx[len(dir_clipreid) + 1:]
-
-            if os.path.exists(path_smplx):
                 from machx_utils.smplx import SmplxPara
                 smplxpara = SmplxPara(smplxpara=path_smplx)
                 drn, _, mark_drn = smplxpara.init_drn()
@@ -350,24 +355,22 @@ class RealPersonJsonInitializer(RealPersonJson):
             for annot_gallery in annots:
                 fea_gallery_clipreid = self.get_clipreid(annot_gallery)
                 score = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
+                score = float(score)
                 annots_with_scores.append((annot_gallery, score))
 
             sorted_annots_with_scores = sorted(annots_with_scores, 
                 key=lambda x: x[1], 
                 reverse=True
             )
-            sorted_annots = [item[0] for item in sorted_annots_with_scores]
-            for annot_gallery in sorted_annots:
-                fea_gallery_clipreid = self.get_clipreid(annot_gallery)
-                print(fea_query_clipreid)
-                print(fea_gallery_clipreid)
-                score_clipreid = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
-                print(score_clipreid)
-                exit()
+            
+            sorted_annots = [item[0] for item in sorted_annots_with_scores]                
+            annot["gallery_sorted"] = sorted_annots_with_scores
+
+            # for annot_gallery in sorted_annots_with_scores:
+            #     print(annot_gallery[0], annot_gallery[1])
+            # exit()
                 
             
-            
-
     def traverse_images(self, dirname):
         images = []
          
