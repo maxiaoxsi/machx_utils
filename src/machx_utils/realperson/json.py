@@ -1,6 +1,7 @@
 from ntpath import dirname
 import os
 import json
+import select
 from unicodedata import category
 from tqdm import tqdm
 from PIL import Image
@@ -23,30 +24,12 @@ def get_image_info(image_path, filename):
         return None, None, None, None
 
 
+
 class Json:
     def __init__(self, dirname, subdataset) -> None:
         self._dirname = dirname
         self._subdataset = subdataset
         self.load_json()
-
-
-    def get_dirname(self, tgtdir):
-        if tgtdir == "annot":
-            dirname_tgt = "annot"
-        elif tgtdir not in self._json["info"]:
-            dirname_tgt = tgtdir
-        else:
-            dirname_tgt = self._json["info"][tgtdir]
-        if not dirname_tgt.startswith('/'):
-            dirname_tgt = os.path.join(self._dirname, dirname_tgt)
-        dirname_tgt = os.path.join(dirname_tgt, self._subdataset)
-        return dirname_tgt
-
-
-    def get_path(self, tgtdir, filename):
-        dirname_tgt = self.get_dirname(tgtdir=tgtdir)
-        path = os.path.join(dirname_tgt, filename)
-        return path
 
 
     def load_json(self):
@@ -75,63 +58,107 @@ class Json:
         return [item["name"] for item in self._json["categories"] if item["supercategory"] == key_parent]
 
 
-    def get_supercategory(self, id, is_annot = False, is_category = False):
+    def get_filename(self, id, is_img = False, is_annot = False, type = "reid"):
+        if is_img:
+            return self._json["images"][id]["filename"]   
+        elif is_annot:
+            if type == "reid":
+                id = self.get_imgid(id, is_annot=True)
+                return self.get_filename(id, is_img=True)
+            elif type in ["skeleton", "render", "clipreid", "smplx"]:
+                return self._json["annotations"][id][type]
+
+
+    def get_dirname(self, tgtdir):
+        if tgtdir == "annot":
+            dirname_tgt = "annot"
+        elif tgtdir not in self._json["info"]:
+            dirname_tgt = tgtdir
+        else:
+            dirname_tgt = self._json["info"][tgtdir]
+        if not dirname_tgt.startswith('/'):
+            dirname_tgt = os.path.join(self._dirname, dirname_tgt)
+        dirname_tgt = os.path.join(dirname_tgt, self._subdataset)
+        return dirname_tgt
+
+
+    def get_path(self, tgtdir, filename, is_img = False, is_annot = False, type = "reid"):
+        if is_img or is_annot:
+            filename = self.get_filename(filename, is_img=is_img, is_annot=is_annot, type=type)
+        dirname_tgt = self.get_dirname(tgtdir=tgtdir)
+        path = os.path.join(dirname_tgt, filename)
+        return path
+
+
+
+    def get_imgid(self, id, is_annot = False):
         if is_annot:
-            id = self._json["annotations"][id]["category_id"]
+            return self._json["annotations"][id]["imgid"]
+
+
+    def get_personid(self, id, is_annot = False):
+        if is_annot:
+            imgid = self.get_imgid(id, is_annot=True)
+            personid = self._json["images"][imgid]["personid"]
+            return personid
+        return None
+
+
+    def get_categoryid(self, id, is_category = False, is_annot = False):
+        if is_category:
+            return self._json["categories"][id]
+        if is_annot:
+            return self._json["annotations"][id]["categoryid"]
+
+
+    def get_supercategoryid(self, id, is_annot = False, is_category = False):
+        if is_annot:
+            id = self.get_categoryid(id, is_annot=True)   
+        elif not is_category:
+            return None
         while self._json["categories"][id]["supercategory"] != "-1":
             id = self._json["categories"][id]["supercategory"]
         return id
-        
-
-    def get_category(self, id, is_category = False, is_annot = False):
-        if is_category:
-            return self._json["categories"][id]
 
 
 
 class RealPersonJson(Json):
     def __init__(self, dirname, subdataset) -> None:
         super().__init__(dirname, subdataset)
-        self.load_json()
 
 
     def load_json(self):
         super().load_json()
         if not self._json:
             return
-        # print(self.get_categories("-1"))
-        # print(self.len_categories("-1"))
-        # print(len(self.get_categories("-1")))
-        self._person = {}
+
+        self._person = {}        
         
         for annot in self._json['annotations']:
             skeleton = annot["skeleton"]
             render = annot["render"]
             imgid = annot["imgid"]
             annotid = annot["id"]
+            categoryid = self.get_supercategoryid(id=annotid, is_annot=True)
+            personid = self.get_personid(id=annotid, is_annot=True)
             if render != "-1" or skeleton != "-1":
-                image = self.get_image(imgid)
-                personid = image["personid"]
-                if personid not in self._person:
-                    self._person[personid] = {}
-                if imgid not in self._person[personid]:
-                    self._person[personid][imgid] = []
-                self._person[personid][imgid].append(annotid)
+                if categoryid not in self._person:
+                    person = {
+                        "personid":personid, 
+                        "categoryid":categoryid,
+                        "images": {}
+                    }
+                    self._person[categoryid] = person
+                    self._person[personid] = person
+                else:
+                    person = self._person[personid]
+                if imgid not in person["images"]:
+                    person["images"][imgid] = []
+                person["images"][imgid].append(annotid)
         
-                
-    def get_image(self, imgid):
-        if not self._json:
-            return None
-        return self._json["images"][imgid]
 
 
-    def get_annot(self, annotid):
-        if not self._json:
-            return None
-        return self._json["annotations"][annotid]
-
-
-    def get_clipreid(self, annot):
+    def get_fea_clipreid(self, annot):
         if isinstance(annot, int):
             annot = self._json["annotations"][annot]
         filename_clipreid = annot["clipreid"]
@@ -154,40 +181,59 @@ class RealPersonJson(Json):
         return np.dot(fea1_clipreid, fea2_clipreid) / (np.linalg.norm(fea1_clipreid) * np.linalg.norm(fea2_clipreid))
 
 
-    def check_ext(self, filename):
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
-        return any(filename.lower().endswith(ext) for ext in image_extensions)
-
-
-    def check_image(self, i):
-        if not self._json:
-            self.load_json()
-        print(self._json["images"][i])
+    def get_pose_tgt(self, annotid):
+        render_tgt = self.get_path("render", annotid, is_annot=True, type="render")
+        skeleton_tgt = self.get_path("skeleton", annotid, is_annot=True, type="skeleton")
+        if not os.path.exists(render_tgt):
+            return skeleton_tgt, None
+        else:
+            return render_tgt, render_tgt if random.random() < 0.5 else skeleton_tgt, render_tgt
 
 
     def get_item(
         self,
-        id_person, 
-        id_frame, 
-        id_img,
-        is_select_bernl,
-        is_select_repeat,
-        rate_mask_aug
+        personid, 
+        frameid, 
+        imgid,
     ):
-        person = self._person[id_person]
-        if id_img != "-1":
-            id_img = random.randint(0, len(person) - 1)
-        annot = person[id_img][0]
+        person = self._person[personid]
+        if imgid == -1:
+            annotid = random.choice(list(person["images"].values()))[0]
+        else:
+            if imgid not in person["images"]:
+                print("imgid key not found!")
+                exit()
+            annotid = person["images"][imgid][0]
+        img_tgt = self.get_path("reid", annotid, is_annot=True)
+        pose_tgt, render_tgt = self.get_pose_tgt(annotid)
+        imgs_ref, poses_ref = self.get_imgs_ref(annotid)
+        return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref
+
+
+    def get_imgs_ref(self, annotid, mode="shuffle", max_img = 5):
+        if mode == "shuffle":
+            gallery_sorted = self._json["annotations"][annotid]["gallery_sorted"]
+            num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
+            selected_images = random.sample(gallery_sorted, num_to_select)
+            imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
+            poses_ref = [self.get_pose_tgt(selected_annotid) for selected_annotid in selected_images]
+            return imgs_ref, poses_ref
         
 
-    def process_batch(self, process_method, tgtdir, batch_size):
+    def check_ext(self, filename, is_img = False):
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+        if is_img:
+            return any(filename.lower().endswith(ext) for ext in image_extensions)
+
+
+    def process_batch(self, process_method, tgtdir, suf, batch_size):
         data_batch = {
             "image_list":[],
             "tgt_list":[],
         }
         for image in tqdm(self._json["images"]):
             data_batch["image_list"].append(self.get_path("image", image["filename"], None))
-            data_batch["tgt_list"].append(self.get_path(tgtdir, image["filename"], 'npy'))
+            data_batch["tgt_list"].append(self.get_path(tgtdir, image["filename"], suf))
             if len(data_batch["image_list"]) == batch_size:
                 process_method(data_batch)
                 data_batch["image_list"] = []
@@ -320,7 +366,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             personid = image['personid']
             imageid = image['id']
             if "drn" not in self._json['annotations'][imageid]:
-                self._json["annotations"][imageid]["category_id"] = dict_personid[personid]
+                self._json["annotations"][imageid]["categoryid"] = dict_personid[personid]
                 continue
             drn = self._json['annotations'][imageid]['drn']
             personid_wtdrn = f"{personid}_{drn}"
@@ -334,26 +380,26 @@ class RealPersonJsonInitializer(RealPersonJson):
                 }
                 self._json["categories"].append(item)
                 id = id + 1
-            self._json["annotations"][imageid]["category_id"] = dict_personid[personid_wtdrn]
+            self._json["annotations"][imageid]["categoryid"] = dict_personid[personid_wtdrn]
 
         dict_categories = {}
 
         for annot in self._json['annotations']:
-            categoryid = annot["category_id"]
-            categoryid = self.get_supercategory(categoryid)
+            categoryid = annot["categoryid"]
+            categoryid = self.get_supercategoryid(categoryid, is_category=True)
             if categoryid not in dict_categories:
                 dict_categories[categoryid] = [annot["id"]]
             else:
                 dict_categories[categoryid].append(annot["id"])
 
         for annot in self._json['annotations']:
-            categoryid = annot["category_id"]
-            categoryid = self.get_supercategory(categoryid)
+            categoryid = annot["categoryid"]
+            categoryid = self.get_supercategoryid(categoryid, is_category=True)
             annots = dict_categories[categoryid]
-            fea_query_clipreid = self.get_clipreid(annot)
+            fea_query_clipreid = self.get_fea_clipreid(annot)
             annots_with_scores = []
             for annot_gallery in annots:
-                fea_gallery_clipreid = self.get_clipreid(annot_gallery)
+                fea_gallery_clipreid = self.get_fea_clipreid(annot_gallery)
                 score = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
                 score = float(score)
                 annots_with_scores.append((annot_gallery, score))
@@ -364,12 +410,8 @@ class RealPersonJsonInitializer(RealPersonJson):
             )
             
             sorted_annots = [item[0] for item in sorted_annots_with_scores]                
-            annot["gallery_sorted"] = sorted_annots_with_scores
-
-            # for annot_gallery in sorted_annots_with_scores:
-            #     print(annot_gallery[0], annot_gallery[1])
-            # exit()
-                
+            annot["gallery_sorted"] = sorted_annots
+   
             
     def traverse_images(self, dirname):
         images = []
@@ -380,7 +422,7 @@ class RealPersonJsonInitializer(RealPersonJson):
 
         for root, dirs, files in os.walk(dirname):
             for file in files:
-                if self.check_ext(file):
+                if self.check_ext(file, is_img=True):
                     file_path = os.path.join(root, file)
                     width, height, id_person, id_camera = get_image_info(file_path, file)
                     if width and height and id_person and id_camera:
@@ -395,6 +437,4 @@ class RealPersonJsonInitializer(RealPersonJson):
                         })
         return images
 
-
-    
 

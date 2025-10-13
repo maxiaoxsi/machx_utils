@@ -1,7 +1,12 @@
+# from turtle import width
 import torchvision.transforms as transforms
 from PIL import Image
 import random
-from machx_utils.realperson import Json
+from machx_utils.realperson import RealPersonJson
+import torchvision.transforms.functional as F
+import numpy as np
+import torch
+
 
 class Scale2D:
     def __init__(self, width, height, interpolation=Image.BILINEAR):
@@ -14,9 +19,69 @@ class Scale2D:
             return img
         return img.resize((self.width, self.height), self.interpolation)
 
+
+class Scale1D:
+    def __init__(self, size_tgt, interpolation=Image.BILINEAR):
+        self._size_tgt = size_tgt
+        self._interpolation = interpolation
+    
+    def __call__(self, img):
+        w, h = img.size
+        if w > h:
+            width_tgt = self._size_tgt
+            height_tgt = int(self._size_tgt / w * h)
+        else:
+            width_tgt = int(self._size_tgt / h * w)
+            height_tgt = self._size_tgt
+        return img.resize((width_tgt, height_tgt), self._interpolation)
+
+
+class RandomCrop:
+    def __init__(self, width_scale, height_scale):
+        self._width_scale = width_scale
+        self._height_scale = height_scale
+        self._random_w = np.random.uniform(width_scale[0], width_scale[1])
+        self._random_h = np.random.uniform(height_scale[0], height_scale[1])
+        
+    
+    def _getPoint(self, scale, w):
+        w_target = int(w * scale)
+        w_target = max(1, w_target)
+        w_target = min(w_target, w)
+        w_start = random.randint(0, w - w_target)
+        w_end = w_start + w_target
+        return w_start, w_end
+    
+    def __call__(self, img):
+        w, h = img.size
+        w_start, w_end = self._getPoint(self._random_w, w)
+        h_start, h_end = self._getPoint(self._random_h, h)
+        return img.crop((w_start, h_start, w_end, h_end))
+
+
+class PadToBottomRight:
+    def __init__(self, target_size, fill=0):
+        self.target_size = target_size  # 目标尺寸 (W, H)
+        self.fill = fill  # 填充值
+
+    def __call__(self, img):
+        """
+        img: Tensor of shape [C, H, W]
+        Returns: Padded Tensor of shape [C, target_H, target_W]
+        """
+        _, h, w = img.shape
+        pad_w = max(self.target_size[0] - w, 0)  # 右侧需填充的宽度
+        pad_h = max(self.target_size[1] - h, 0)  # 底部需填充的高度
+        padding = (0, 0, pad_w, pad_h)  
+        img_padded = F.pad(img, padding, fill=self.fill)
+        return img_padded
+
+
 class TransformsSet:
-    def __init__(self) -> None:
+    def __init__(self, img_size, width_scale, height_scale, rate_random_erase) -> None:
+        random_crop = RandomCrop(width_scale, height_scale)
         self._transforms = {}
+
         self._transforms["reid"]=transforms.Compose(
             [
                 Scale2D(128, 256),
@@ -25,15 +90,35 @@ class TransformsSet:
             ]
         )
 
-    def __call__(self, *args: Any, **kwds: Any) -> Any:
-        return self._transforms[args[0]]
+        self._transforms["ref"] = transforms.Compose(
+            [
+                random_crop,
+                Scale1D(img_size[0]),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5], std=[0.5]),
+                transforms.RandomErasing(p=rate_random_erase, scale=(0.12, 0.37), ratio=(0.3, 3.3), value=0, inplace=False),
+                PadToBottomRight(target_size=img_size, fill=0),
+            ]
+        ) 
+        
+        self._transforms["norm"] = transforms.Compose(
+            [
+                random_crop,
+                Scale1D(img_size[0]),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.5], std=[0.5]),
+                PadToBottomRight(target_size=img_size, fill=0),
+            ]
+        )
+
+    def __call__(self, type):
+        return self._transforms[type]
 
 class Dataset:
     def __init__(
         self, 
-        dirname, 
-        datasetname, 
-        subdataset,
+        json_tgt,
+        json_ref,
         is_select_bernl=True,
         is_select_repeat=True,
         rate_random_erase=0.5,
@@ -47,9 +132,13 @@ class Dataset:
         height_scale=(1, 1),
         n_frame=10,
     ) -> None:
-        self._transforms_set = TransformsSet()
-        self._json = Json(dirname, datasetname, subdataset)
-        self._img_size=img_size
+        self._json_tgt = json_tgt
+        self._json_ref = json_ref
+        self._img_size = img_size
+        self._width_scale = width_scale
+        self._height_scale = height_scale
+        self._rate_random_erase = rate_random_erase
+        
 
     def __len__(self):
         if not self._len:
@@ -68,37 +157,59 @@ class Dataset:
             idx_img=-1,
         )
 
-    def get_item(self, id_person, id_frame, id_img):
-        sample = self._json.get_item(
-            id_person, 
-            id_frame, 
-            id_img,
-            is_select_bernl = self._is_select_bernl,
-            is_select_repeat = self._is_select_repeat,
-            rate_mask_aug = self.rate_mask_aug,
+    def get_item(self, personid, frameid, imgid):
+        img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self._json_tgt.get_item(
+            personid=personid, 
+            frameid=frameid, 
+            imgid=imgid,
         )
-
-        img_ref, img_reid = self.get_img_ref(sample['imglist_ref'])
-        img_tgt = self.get_img_tgt(sample['img_tgt'])
-        img_bkgd = self.get_img_bkgd(sample['img_bkgd'])
-        pose_skeleton, pose_render, pose_rgb = self.get_pose(
-            sample['img_skeleton'],
-            sample['img_render'],
-            sample['img_tgt'],
-        )
+        img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
+        imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
         return {
-            "img_ref": img_ref,
             "img_tgt": img_tgt,
-            "img_reid": img_reid,
-            "img_bkgd": img_bkgd,
-            "pose_skeleton": pose_skeleton,
-            "pose_render": pose_render,
-            "pose_rgb": pose_rgb,
+            "bkgd_tgt": bkgd_tgt,
+            "pose_tgt": pose_tgt,
+            "imgs_ref": imgs_ref,
+            "reids_ref": reids_ref,
+            "poses_ref": poses_ref,
         }
 
-    def get_image_tensor(self, type_transforms, path_image):
-        image_pil = Image.open(path_image)
-        return self._transforms_set(type_transforms)(image_pil)
+
+    def get_img_tgt(self, img_tgt, pose_tgt, render_tgt):
+        transforms_set = TransformsSet(self._img_size, 
+            self._width_scale, self._height_scale, self._rate_random_erase)
+        from machx_utils.realperson import make_mask
+        _, _, bkgd_tgt = make_mask(img_tgt, render_tgt)
+        img_tgt = self.get_image_tensor(transforms_set, "norm", img_tgt)
+        pose_tgt = self.get_image_tensor(transforms_set, "norm", pose_tgt)
+        return img_tgt, bkgd_tgt, pose_tgt
+
+
+    def get_imgs_ref(self, imgs_ref, poses_ref):
+        transforms_set = TransformsSet(self._img_size, 
+            self._width_scale, self._height_scale, self._rate_random_erase)
+        imgs_ref_list = []
+        reids_ref_list = []
+        poses_ref_list = []
+        for (img_ref, pose_ref) in zip(imgs_ref, poses_ref):
+            transforms_set = TransformsSet(self._img_size, 
+                self._width_scale, self._height_scale, self._rate_random_erase)
+            reid_ref = self.get_image_tensor(transforms_set, "reid", img_ref)
+            img_ref = self.get_image_tensor(transforms_set, "ref", img_ref)
+            pose_ref = self.get_image_tensor(transforms_set, "norm", pose_ref)
+            imgs_ref_list.append(img_ref)
+            reids_ref_list.append(reid_ref)
+            poses_ref_list.append(pose_ref)
+        imgs_ref = torch.stack(imgs_ref_list, dim=0)
+        reids_ref = torch.stack(reids_ref_list, dim=0)
+        poses_ref = torch.stack(poses_ref_list, dim = 0)
+        return imgs_ref, reids_ref, poses_ref
+
+    
+    def get_image_tensor(self, transforms_set, type, image):
+        if isinstance(image, str):
+            image = Image.open(image)
+        return transforms_set(type)(image)
 
 
 
