@@ -163,8 +163,16 @@ class Dataset:
             frameid=frameid, 
             imgid=imgid,
         )
+
+        # from machx_utils.realperson import save_items
+        # save_items(img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, "./img_test")        
+        
         img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
         imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
+        
+        from machx_utils.realperson import save_items_tensor
+        save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_ref, "test_img_tensor")
+
         return {
             "img_tgt": img_tgt,
             "bkgd_tgt": bkgd_tgt,
@@ -182,6 +190,7 @@ class Dataset:
         _, _, bkgd_tgt = make_mask(img_tgt, render_tgt)
         img_tgt = self.get_image_tensor(transforms_set, "norm", img_tgt)
         pose_tgt = self.get_image_tensor(transforms_set, "norm", pose_tgt)
+        bkgd_tgt = self.get_image_tensor(transforms_set, "norm", bkgd_tgt)
         return img_tgt, bkgd_tgt, pose_tgt
 
 
@@ -206,10 +215,10 @@ class Dataset:
         return imgs_ref, reids_ref, poses_ref
 
     
-    def get_image_tensor(self, transforms_set, type, image):
+    def get_image_tensor(self, transforms_set, type_tansform, image):
         if isinstance(image, str):
             image = Image.open(image)
-        return transforms_set(type)(image)
+        return transforms_set(type_tansform)(image)
 
 
 

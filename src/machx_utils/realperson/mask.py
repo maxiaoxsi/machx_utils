@@ -3,6 +3,7 @@ from PIL import Image
 import numpy as np
 import random
 
+
 def img_wobkgd(img_reid):
     img_mask = Image.new("L", img_reid.size, color=0)
     img_fegd = img_reid

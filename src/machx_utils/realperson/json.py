@@ -82,9 +82,11 @@ class Json:
         return dirname_tgt
 
 
-    def get_path(self, tgtdir, filename, is_img = False, is_annot = False, type = "reid"):
+    def get_path(self, tgtdir, filename, is_img = False, is_annot = False, type = "reid", suf = None):
         if is_img or is_annot:
             filename = self.get_filename(filename, is_img=is_img, is_annot=is_annot, type=type)
+        if suf is not None:
+            filename = filename.replace(filename.splite('.')[-1], suf)
         dirname_tgt = self.get_dirname(tgtdir=tgtdir)
         path = os.path.join(dirname_tgt, filename)
         return path
@@ -219,7 +221,7 @@ class RealPersonJson(Json):
             num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
             selected_images = random.sample(gallery_sorted, num_to_select)
             imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
-            poses_ref = [self.get_pose_tgt(selected_annotid) for selected_annotid in selected_images]
+            poses_ref = [self.get_pose_tgt(selected_annotid)[0] for selected_annotid in selected_images]
             return imgs_ref, poses_ref
         
 
@@ -235,8 +237,12 @@ class RealPersonJson(Json):
             "tgt_list":[],
         }
         for image in tqdm(self._json["images"]):
-            data_batch["image_list"].append(self.get_path("image", image["filename"], None))
-            data_batch["tgt_list"].append(self.get_path(tgtdir, image["filename"], suf))
+            path_reid = self.get_path("image", image["filename"])
+            path_clipreid = self.get_path("clipreid", image["filename"], suf='npy')
+            if os.path.exists(path_clipreid):
+                continue
+            data_batch["image_list"].append(path_reid)
+            data_batch["tgt_list"].append(path_clipreid)
             if len(data_batch["image_list"]) == batch_size:
                 process_method(data_batch)
                 data_batch["image_list"] = []
