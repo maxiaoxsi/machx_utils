@@ -187,7 +187,10 @@ class RealPersonJson(Json):
         if not os.path.exists(render_tgt):
             return skeleton_tgt, None
         else:
-            return render_tgt, render_tgt if random.random() < 0.5 else skeleton_tgt, render_tgt
+            if random.random() < 0.5:
+                return render_tgt, render_tgt
+            else:
+                return skeleton_tgt, render_tgt
 
 
     def get_item(
