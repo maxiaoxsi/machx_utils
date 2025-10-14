@@ -86,7 +86,7 @@ class Json:
         if is_img or is_annot:
             filename = self.get_filename(filename, is_img=is_img, is_annot=is_annot, type=type)
         if suf is not None:
-            filename = filename.replace(filename.splite('.')[-1], suf)
+            filename = filename.replace(filename.split('.')[-1], suf)
         dirname_tgt = self.get_dirname(tgtdir=tgtdir)
         path = os.path.join(dirname_tgt, filename)
         return path
@@ -98,9 +98,12 @@ class Json:
             return self._json["annotations"][id]["imgid"]
 
 
-    def get_personid(self, id, is_annot = False):
+    def get_personid(self, id, is_annot = False, is_img = False):
         if is_annot:
             imgid = self.get_imgid(id, is_annot=True)
+            personid = self._json["images"][imgid]["personid"]
+            return personid
+        if is_img:
             personid = self._json["images"][imgid]["personid"]
             return personid
         return None
@@ -238,7 +241,10 @@ class RealPersonJson(Json):
         }
         for image in tqdm(self._json["images"]):
             path_reid = self.get_path("image", image["filename"])
-            path_clipreid = self.get_path("clipreid", image["filename"], suf='npy')
+            path_clipreid = self.get_path(tgtdir, image["filename"], suf=suf)
+            personid = self.get_personid(image["id"], is_img=True)
+            if not personid.isnumeric() or int(personid) <= 0:
+                continue
             if os.path.exists(path_clipreid):
                 continue
             data_batch["image_list"].append(path_reid)
@@ -247,7 +253,8 @@ class RealPersonJson(Json):
                 process_method(data_batch)
                 data_batch["image_list"] = []
                 data_batch["tgt_list"] = []
-        process_method(data_batch)
+        if data_batch["image_list"] is not []:
+            process_method(data_batch)
 
 
 
