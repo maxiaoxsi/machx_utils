@@ -421,15 +421,15 @@ class RealPersonJsonInitializer(RealPersonJson):
                 fea_gallery_clipreid = self.get_fea_clipreid(annot_gallery)
                 score = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
                 score = float(score)
-                annots_with_scores.append((annot_gallery, score))
+                annots_with_scores.append((annotid, score))
 
             sorted_annots_with_scores = sorted(annots_with_scores, 
                 key=lambda x: x[1], 
                 reverse=True
             )
             
-            sorted_annots = [item[0] for item in sorted_annots_with_scores]                
-            annot["gallery_sorted"] = sorted_annots
+            sorted_annots = [item[0] for item in sorted_annots_with_scores]
+            annot["reference"] = sorted_annots
 
 
     def traverse_images(self, dirname):
