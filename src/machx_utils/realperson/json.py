@@ -109,6 +109,16 @@ class Json:
             id = self._json["categories"][id]["supercategory"]
         return id
 
+    def get_image_info(self, path_image):
+        """获取图片的基本信息"""
+        try:
+            with Image.open(path_image) as img:
+                width, height = img.size
+                return width, height
+        except Exception as e:
+            print(f"无法读取图片 {path_image}: {e}")
+            return None, None
+
 
 
 class RealPersonJson(Json):
@@ -295,6 +305,7 @@ class RealPersonJsonInitializer(RealPersonJson):
                 "filename": image["filename"],
                 "width": image["width"],
                 "height": image["height"],
+                "visible": image["visible"],
                 "personid": image["personid"],
                 "camid": image["camid"],
             }
@@ -346,59 +357,67 @@ class RealPersonJsonInitializer(RealPersonJson):
             self._json["annotations"].append(item)
         
 
-    def _init_categories(self):
-        dict_personid = {}
-        id = 0
-        for image in self._json['images']:
-            personid = image['personid']
-            imageid = image['id']
-            if personid not in dict_personid:
-                dict_personid[personid] = id
-                item = {
-                    "id": id,
-                    "name": personid,
-                    "supercategory": "-1",
-                }
-                self._json["categories"].append(item)
-                id = id + 1
+    def _init_category_item(self, id, personid, supercategotyid):
+        item = {
+            "id": id,
+            "personid": personid,
+            "supercategory": supercategotyid,
+            "images": [],
+            "front": [],
+            "back": [],
+            "left": [],
+            "right": [],
+        }
+        return item
+
+    def get_categoryid(self, key, is_personid = False):
+        if is_personid:
+            for category in self._json["categories"]:
+                if category["personid"] == key:
+                    return category["id"]
+    
+
+    def get_drn(self, key, is_annot = False):
+        if is_annot:
+            if "drn" not in self._json["annotations"][key]:
+                return None
+            return self._json["annotations"][key]["drn"]
         
+
+    def _add_img_to_category(self, categotyid, imgid):
+        category = self._json["categories"][categotyid]
+        if imgid in category["images"]:
+            return
+        category["images"].append(imgid)
+        self._json["annotations"][imgid]["categoryid"] = categotyid
+        drn = self.get_drn(imgid, is_annot=True)
+        if drn is not None:
+            category[drn].append(imgid)
+    
+
+    def _init_categories(self):
+        id = 0
+        personids = []
         for image in self._json['images']:
             personid = image['personid']
-            imageid = image['id']
-            if "drn" not in self._json['annotations'][imageid]:
-                self._json["annotations"][imageid]["categoryid"] = dict_personid[personid]
-                continue
-            drn = self._json['annotations'][imageid]['drn']
-            personid_wtdrn = f"{personid}_{drn}"
-            supercategory = dict_personid[personid]
-            if personid_wtdrn not in dict_personid:
-                dict_personid[personid_wtdrn] = id
-                item = {
-                    "id": id,
-                    "name": personid_wtdrn,
-                    "supercategory": supercategory
-                }
-                self._json["categories"].append(item)
+            imgid = image['id']
+            if personid not in personids:
+                personids.append(personid)
+                categoryid = id
+                category = self._init_category_item(categoryid, personid, "-1")
+                self._json["categories"].append(category)
                 id = id + 1
-            self._json["annotations"][imageid]["categoryid"] = dict_personid[personid_wtdrn]
-
-        dict_categories = {}
-
-        for annot in self._json['annotations']:
-            categoryid = annot["categoryid"]
-            categoryid = self.get_supercategoryid(categoryid, is_category=True)
-            if categoryid not in dict_categories:
-                dict_categories[categoryid] = [annot["id"]]
             else:
-                dict_categories[categoryid].append(annot["id"])
-
+                categoryid = self.get_categoryid(personid, is_personid=True)
+            self._add_img_to_category(categoryid, imgid)
+        
         for annot in self._json['annotations']:
             categoryid = annot["categoryid"]
-            categoryid = self.get_supercategoryid(categoryid, is_category=True)
-            annots = dict_categories[categoryid]
+            imgs = self._json['categories'][categoryid]["images"]
             fea_query_clipreid = self.get_fea_clipreid(annot)
             annots_with_scores = []
-            for annot_gallery in annots:
+            for annotid in imgs:
+                annot_gallery = self._json["annotations"][annotid]
                 fea_gallery_clipreid = self.get_fea_clipreid(annot_gallery)
                 score = self.get_score_clipreid(fea_query_clipreid, fea_gallery_clipreid)
                 score = float(score)
@@ -411,8 +430,8 @@ class RealPersonJsonInitializer(RealPersonJson):
             
             sorted_annots = [item[0] for item in sorted_annots_with_scores]                
             annot["gallery_sorted"] = sorted_annots
-   
-            
+
+
     def traverse_images(self, dirname):
         images = []
          
@@ -424,7 +443,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             for file in files:
                 if self.check_ext(file, is_img=True):
                     file_path = os.path.join(root, file)
-                    width, height, id_person, id_camera = self.get_image_info(file_path, file)
+                    width, height, id_person, id_camera, visible = self.get_image_info(file_path, file)
                     if width and height and id_person and id_camera:
                         filepath = os.path.join(root, file)
                         filesubpath = filepath[len(dirname)+1:]
@@ -432,21 +451,13 @@ class RealPersonJsonInitializer(RealPersonJson):
                             "filename": filesubpath,
                             "height": height,
                             "width": width,
+                            "visible": visible,
                             "personid": id_person,
                             "camid": id_camera,
                         })
         return images
 
-    def get_image_info(self, path_image):
-        """获取图片的基本信息"""
-        try:
-            with Image.open(path_image) as img:
-                width, height = img.size
-                return width, height
-        except Exception as e:
-            print(f"无法读取图片 {path_image}: {e}")
-            return None, None
-
+    
 
 class MarketInitializer(RealPersonJsonInitializer):
     def __init__(
@@ -463,15 +474,16 @@ class MarketInitializer(RealPersonJsonInitializer):
         super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
                 path_render, path_smplx, path_clipreid)
     
+
     def get_image_info(self, path_image, filename):
         """获取图片的基本信息"""
-        width, height = super().get_image_info(path_image=path_image)
+        width, height = super().get_image_info(path_image)
         if width is None:
-            return None, None, None, None
+            return None, None, None, None, None
         id_person = filename.split('_')[0]
         id_camera = filename.split('_')[1].split('c')[1].split('s')[0]
         if not id_person.isdigit() or int(id_person) < 1:
-            return None, None, None, None        
+            return None, None, None, None, None  
         return width, height, id_person, id_camera, "visible"
 
 
@@ -492,13 +504,13 @@ class SYSUMM01Initializer(RealPersonJsonInitializer):
     
     def get_image_info(self, path_image, filename):
         """获取图片的基本信息"""
-        width, height = super().get_image_info(path_image=path_image)
+        width, height = super().get_image_info(path_image)
         if width is None:
-            return None, None, None, None
+            return None, None, None, None, None
         id_person = path_image.split('/')[-2]
         id_camera = path_image.split('/')[-3][3]
         if not id_person.isdigit() or int(id_person) < 1:
-            return None, None, None, None        
+            return None, None, None, None, None  
         if id_camera in ['3', '6']:
             visible = "infrared"
         else:
