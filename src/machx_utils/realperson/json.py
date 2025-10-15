@@ -104,7 +104,7 @@ class Json:
             personid = self._json["images"][imgid]["personid"]
             return personid
         if is_img:
-            personid = self._json["images"][imgid]["personid"]
+            personid = self._json["images"][id]["personid"]
             return personid
         return None
 
