@@ -8,22 +8,6 @@ from PIL import Image
 import numpy as np
 import random
 
-def get_image_info(image_path, filename):
-    """获取图片的基本信息"""
-    if 'market' in image_path.lower():
-        id_person = filename.split('_')[0]
-        id_camera = filename.split('_')[1].split('c')[1].split('s')[0]
-    if not id_person.isdigit() or int(id_person) < 1:
-        return None, None, None, None
-    try:
-        with Image.open(image_path) as img:
-            width, height = img.size
-            return width, height, id_person, id_camera
-    except Exception as e:
-        print(f"无法读取图片 {image_path}: {e}")
-        return None, None, None, None
-
-
 
 class Json:
     def __init__(self, dirname, subdataset) -> None:
@@ -302,7 +286,7 @@ class RealPersonJsonInitializer(RealPersonJson):
 
     def _init_images(self):
         dirname = self.get_dirname("reid")
-        images= self.traverse_images(dirname)
+        images = self.traverse_images(dirname)
         images.sort(key=lambda x: (int(x['personid']), int(x['camid']), x["filename"]))
         images_new = []
         for i, image in enumerate(images):
@@ -440,7 +424,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             for file in files:
                 if self.check_ext(file, is_img=True):
                     file_path = os.path.join(root, file)
-                    width, height, id_person, id_camera = get_image_info(file_path, file)
+                    width, height, id_person, id_camera = self.get_image_info(file_path, file)
                     if width and height and id_person and id_camera:
                         filepath = os.path.join(root, file)
                         filesubpath = filepath[len(dirname)+1:]
@@ -453,4 +437,70 @@ class RealPersonJsonInitializer(RealPersonJson):
                         })
         return images
 
+    def get_image_info(self, path_image):
+        """获取图片的基本信息"""
+        try:
+            with Image.open(path_image) as img:
+                width, height = img.size
+                return width, height
+        except Exception as e:
+            print(f"无法读取图片 {path_image}: {e}")
+            return None, None
 
+
+class MarketInitializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
+                path_render, path_smplx, path_clipreid)
+    
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image=path_image)
+        if width is None:
+            return None, None, None, None
+        id_person = filename.split('_')[0]
+        id_camera = filename.split('_')[1].split('c')[1].split('s')[0]
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None        
+        return width, height, id_person, id_camera, "visible"
+
+
+class SYSUMM01Initializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
+                path_render, path_smplx, path_clipreid)
+    
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image=path_image)
+        if width is None:
+            return None, None, None, None
+        id_person = path_image.split('/')[-2]
+        id_camera = path_image.split('/')[-3][3]
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None        
+        if id_camera in ['3', '6']:
+            visible = "infrared"
+        else:
+            visible = "visible"
+        return width, height, id_person, id_camera, visible
