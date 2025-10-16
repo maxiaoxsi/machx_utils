@@ -117,8 +117,8 @@ class TransformsSet:
 class Dataset:
     def __init__(
         self, 
-        json_tgt,
-        json_ref,
+        jsons_tgt,
+        jsons_ref,
         is_select_bernl=True,
         is_select_repeat=True,
         rate_random_erase=0.5,
@@ -132,8 +132,8 @@ class Dataset:
         height_scale=(1, 1),
         n_frame=10,
     ) -> None:
-        self._json_tgt = json_tgt
-        self._json_ref = json_ref
+        self._jsons_tgt = jsons_tgt
+        self._jsons_ref = jsons_ref
         self._img_size = img_size
         self._width_scale = width_scale
         self._height_scale = height_scale
@@ -157,21 +157,39 @@ class Dataset:
             idx_img=-1,
         )
 
-    def get_item(self, personid, frameid, imgid):
-        img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self._json_tgt.get_item(
-            personid=personid, 
-            frameid=frameid, 
-            imgid=imgid,
-        )
+    def get_item_tgt(self, personid, imgid):
+        json_tgt = random.choice(self._jsons_tgt)
+        img_tgt, pose_tgt, render_tgt = json_tgt.get_img_tgt(personid, imgid)
+        return img_tgt, pose_tgt, render_tgt
 
+    def random_select_simple(images, n):
+        all_elements = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
+        return random.sample(all_elements, min(n, len(all_elements)))
+
+    def get_item_ref(self, personid, n_max):
+        images = [json.get_images(personid) for json in self._jsons_ref]
+        images = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
+        n_max = random.randint(1, n_max)
+        images_selected = random.sample(images, min(n_max, len(images)))
+        imgs_ref = []
+        poses_ref = []
+        for (i, imgid) in images_selected:
+            img_ref, pose_ref = self._jsons_ref[i].get_img_ref(imgid)
+            imgs_ref.append(img_ref)
+            poses_ref.append(pose_ref)
+        return imgs_ref, poses_ref
+
+    def get_item(self, personid, frameid, imgid):
+        img_tgt, pose_tgt, render_tgt = self.get_item_tgt(personid, imgid)
+        imgs_ref, poses_ref = self.get_item_ref(personid, 8)
         # from machx_utils.realperson import save_items
         # save_items(img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, "./img_test")        
         
         img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
         imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
         
-        from machx_utils.realperson import save_items_tensor
-        save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_ref, "test_img_tensor")
+        # from machx_utils.realperson import save_items_tensor
+        # save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_ref, "test_img_tensor")
 
         return {
             "img_tgt": img_tgt,

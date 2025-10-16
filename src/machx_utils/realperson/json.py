@@ -95,7 +95,7 @@ class Json:
 
     def get_categoryid(self, id, is_category = False, is_annot = False):
         if is_category:
-            return self._json["categories"][id]
+            return self._json["categories"][id]["id"]
         if is_annot:
             return self._json["annotations"][id]["categoryid"]
 
@@ -103,8 +103,6 @@ class Json:
     def get_supercategoryid(self, id, is_annot = False, is_category = False):
         if is_annot:
             id = self.get_categoryid(id, is_annot=True)   
-        elif not is_category:
-            return None
         while self._json["categories"][id]["supercategory"] != "-1":
             id = self._json["categories"][id]["supercategory"]
         return id
@@ -131,32 +129,13 @@ class RealPersonJson(Json):
         if not self._json:
             return
 
-        self._person = {}        
+        self._categories = {}        
         
-        for annot in self._json['annotations']:
-            skeleton = annot["skeleton"]
-            render = annot["render"]
-            imgid = annot["imgid"]
-            annotid = annot["id"]
-            categoryid = self.get_supercategoryid(id=annotid, is_annot=True)
-            personid = self.get_personid(id=annotid, is_annot=True)
-            if render != "-1" or skeleton != "-1":
-                if categoryid not in self._person:
-                    person = {
-                        "personid":personid, 
-                        "categoryid":categoryid,
-                        "images": {}
-                    }
-                    self._person[categoryid] = person
-                    self._person[personid] = person
-                else:
-                    person = self._person[personid]
-                if imgid not in person["images"]:
-                    person["images"][imgid] = []
-                person["images"][imgid].append(annotid)
+        for category in self._json['categories']:
+            personid = category['personid']
+            self._categories[personid] = category
+
         
-
-
     def get_fea_clipreid(self, annot):
         if isinstance(annot, int):
             annot = self._json["annotations"][annot]
@@ -192,6 +171,56 @@ class RealPersonJson(Json):
                 return skeleton_tgt, render_tgt
 
 
+    def get_images(self, personid):
+        '''
+        * para personid:int or str 
+        * para imgid: int idx or img in categories['images']
+        * ans images: list: [imgid]
+        '''
+        if isinstance(personid, int):
+            images = self._json["categories"][personid]["images"]
+        elif isinstance(personid, str):
+            images = self._categories[personid]["images"]
+        return images
+
+
+    def get_img_tgt(
+        self, 
+        personid,
+        imageid,
+    ):
+        '''
+         * para personid: int or str
+         * para imgid: int 
+         * ans img_tgt: str, path
+         * ans pose_tgt: str, path
+         * ans render_tgt: str, path
+        '''
+        images = self.get_images(personid)
+        if imageid <= -1:
+            imgid = random.choice(images)
+        if imageid < len(images):
+            imgid = images[imageid % len(images)] 
+        img_tgt = self.get_path("reid", imgid, is_img=True)
+        pose_tgt, render_tgt = self.get_pose_tgt(imgid)
+        return img_tgt, pose_tgt, render_tgt
+
+    def get_img_ref(self, imgid):
+        img_ref = self.get_path("reid", imgid, is_img=True)
+        pose_ref = self.get_pose_tgt(imgid)[0]
+        return img_ref, pose_ref
+
+
+    def get_imgs_ref(self, personid, mode="shuffle", max_img = 5):
+        if mode == "shuffle":
+            gallery_sorted = self._json["annotations"][annotid]["gallery_sorted"]
+            num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
+            selected_images = random.sample(gallery_sorted, num_to_select)
+            imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
+            poses_ref = [self.get_pose_tgt(selected_annotid)[0] for selected_annotid in selected_images]
+            return imgs_ref, poses_ref
+
+
     def get_item(
         self,
         personid, 
@@ -210,17 +239,7 @@ class RealPersonJson(Json):
         pose_tgt, render_tgt = self.get_pose_tgt(annotid)
         imgs_ref, poses_ref = self.get_imgs_ref(annotid)
         return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref
-
-
-    def get_imgs_ref(self, annotid, mode="shuffle", max_img = 5):
-        if mode == "shuffle":
-            gallery_sorted = self._json["annotations"][annotid]["gallery_sorted"]
-            num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
-            selected_images = random.sample(gallery_sorted, num_to_select)
-            imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
-            poses_ref = [self.get_pose_tgt(selected_annotid)[0] for selected_annotid in selected_images]
-            return imgs_ref, poses_ref
-        
+       
 
     def check_ext(self, filename, is_img = False):
         image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
@@ -410,7 +429,10 @@ class RealPersonJsonInitializer(RealPersonJson):
             else:
                 categoryid = self.get_categoryid(personid, is_personid=True)
             self._add_img_to_category(categoryid, imgid)
+        self._init_reference()
         
+
+    def _init_reference(self):
         for annot in self._json['annotations']:
             categoryid = annot["categoryid"]
             imgs = self._json['categories'][categoryid]["images"]
@@ -487,6 +509,7 @@ class MarketInitializer(RealPersonJsonInitializer):
         return width, height, id_person, id_camera, "visible"
 
 
+
 class SYSUMM01Initializer(RealPersonJsonInitializer):
     def __init__(
         self, 
@@ -516,3 +539,92 @@ class SYSUMM01Initializer(RealPersonJsonInitializer):
         else:
             visible = "visible"
         return width, height, id_person, id_camera, visible
+
+
+
+class MSMT17V1Initializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
+                path_render, path_smplx, path_clipreid)
+    
+
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image)
+        if width is None:
+            return None, None, None, None, None
+        id_person = filename.split('_')[0]
+        id_camera = filename.split('_')[1].split('c')[1]
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None, None  
+        return width, height, id_person, id_camera, "visible"
+
+
+
+class OCCReIDInitializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
+                path_render, path_smplx, path_clipreid)
+    
+
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image)
+        if width is None:
+            return None, None, None, None, None
+        id_person = filename.split('_')[0]
+        id_camera = "1"
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None, None  
+        return width, height, id_person, id_camera, "visible"
+
+
+
+class DUKEInitializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
+                path_render, path_smplx, path_clipreid)
+    
+
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image)
+        if width is None:
+            return None, None, None, None, None
+        id_person = filename.split('_')[0]
+        id_camera = filename.split('_')[1].split('c')[1]
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None, None
+        return width, height, id_person, id_camera, "visible"
+
+
