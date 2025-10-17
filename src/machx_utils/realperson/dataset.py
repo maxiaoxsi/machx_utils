@@ -151,20 +151,33 @@ class Dataset:
         return key in self._keys
 
     def __getitem__(self, idx):
-        return self.get_item(
+        img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self.get_item(
             id_person=idx,
             idx_vid=-1,
             idx_img=-1,
         )
+        img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
+        imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
+        return {
+            "img_tgt": img_tgt,
+            "bkgd_tgt": bkgd_tgt,
+            "pose_tgt": pose_tgt,
+            "imgs_ref": imgs_ref,
+            "reids_ref": reids_ref,
+            "poses_ref": poses_ref,
+        }
+
 
     def get_item_tgt(self, personid, imgid):
         json_tgt = random.choice(self._jsons_tgt)
         img_tgt, pose_tgt, render_tgt = json_tgt.get_img_tgt(personid, imgid)
         return img_tgt, pose_tgt, render_tgt
 
+
     def random_select_simple(images, n):
         all_elements = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
         return random.sample(all_elements, min(n, len(all_elements)))
+
 
     def get_item_ref(self, personid, n_max):
         images = [json.get_images(personid) for json in self._jsons_ref]
@@ -179,26 +192,11 @@ class Dataset:
             poses_ref.append(pose_ref)
         return imgs_ref, poses_ref
 
+
     def get_item(self, personid, frameid, imgid):
         img_tgt, pose_tgt, render_tgt = self.get_item_tgt(personid, imgid)
         imgs_ref, poses_ref = self.get_item_ref(personid, 8)
-        from machx_utils.realperson import save_items
-        save_items(img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, "./img_test")        
-        exit()
-        img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
-        imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
-        
-        # from machx_utils.realperson import save_items_tensor
-        # save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_ref, "test_img_tensor")
-
-        return {
-            "img_tgt": img_tgt,
-            "bkgd_tgt": bkgd_tgt,
-            "pose_tgt": pose_tgt,
-            "imgs_ref": imgs_ref,
-            "reids_ref": reids_ref,
-            "poses_ref": poses_ref,
-        }
+        return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref
 
 
     def get_img_tgt(self, img_tgt, pose_tgt, render_tgt):

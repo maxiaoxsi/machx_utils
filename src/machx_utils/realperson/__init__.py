@@ -10,6 +10,9 @@ import torchvision.transforms as transforms
 
 
 def save_img(img, dirname, filename):
+    if img is None:
+        img = Image.new('RGB', (128, 256), color='black')
+        return
     if not os.path.exists(dirname):
         os.makedirs(dirname)
     path = os.path.join(dirname, filename)
