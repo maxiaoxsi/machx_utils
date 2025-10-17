@@ -182,9 +182,9 @@ class Dataset:
     def get_item(self, personid, frameid, imgid):
         img_tgt, pose_tgt, render_tgt = self.get_item_tgt(personid, imgid)
         imgs_ref, poses_ref = self.get_item_ref(personid, 8)
-        # from machx_utils.realperson import save_items
-        # save_items(img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, "./img_test")        
-        
+        from machx_utils.realperson import save_items
+        save_items(img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, "./img_test")        
+        exit()
         img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
         imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
         
