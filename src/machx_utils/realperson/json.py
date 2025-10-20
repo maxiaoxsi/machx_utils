@@ -136,6 +136,10 @@ class RealPersonJson(Json):
             self._categories[personid] = category
 
         
+    def __contains__(self, item):
+        return item in self._categories
+
+
     def get_fea_clipreid(self, annot):
         if isinstance(annot, int):
             annot = self._json["annotations"][annot]
