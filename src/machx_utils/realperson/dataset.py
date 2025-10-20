@@ -155,15 +155,11 @@ class Dataset:
         
 
     def __len__(self):
-        if not self._len:
-            self._len = self._json.len_categories("-1") 
-        return self._len
+        return len(self._personid_list)
 
 
-    def __contains__(self, key):
-        if not self._keys:
-            self._keys = self._json.get_categories("-1")
-        return key in self._keys
+    def __contains__(self, item):
+        return item in self._personid_list
 
 
     def __getitem__(self, idx):
