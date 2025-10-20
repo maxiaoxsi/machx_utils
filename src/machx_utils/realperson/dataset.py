@@ -145,10 +145,12 @@ class Dataset:
             self._len = self._json.len_categories("-1") 
         return self._len
 
+
     def __contains__(self, key):
         if not self._keys:
             self._keys = self._json.get_categories("-1")
         return key in self._keys
+
 
     def __getitem__(self, idx):
         img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self.get_item(

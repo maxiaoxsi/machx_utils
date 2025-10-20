@@ -24,8 +24,8 @@ class Json:
             return
         with open(jsonpath, 'r', encoding='utf-8') as f:
             self._json = json.load(f)
-        
-        
+
+    
     def save_json(self):
         jsonpath = self.get_dirname("annot") + ".json"
         version = self._json['info']['version']
