@@ -39,7 +39,7 @@ class Json:
 
 
     def get_categories(self, key_parent):
-        return [item["name"] for item in self._json["categories"] if item["supercategory"] == key_parent]
+        return [item["personid"] for item in self._json["categories"] if item["supercategory"] == key_parent]
 
 
     def get_filename(self, id, is_img = False, is_annot = False, type = "reid"):
