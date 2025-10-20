@@ -165,8 +165,7 @@ class Dataset:
     def __getitem__(self, idx):
         img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self.get_item(
             personid=idx,
-            idx_vid=-1,
-            idx_img=-1,
+            imgid=-1,
         )
         img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
         imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
@@ -205,7 +204,7 @@ class Dataset:
         return imgs_ref, poses_ref
 
 
-    def get_item(self, personid, frameid, imgid):
+    def get_item(self, personid, imgid):
         img_tgt, pose_tgt, render_tgt = self.get_item_tgt(personid, imgid)
         imgs_ref, poses_ref = self.get_item_ref(personid, 8)
         return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref
