@@ -154,7 +154,7 @@ class Dataset:
 
     def __getitem__(self, idx):
         img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self.get_item(
-            id_person=idx,
+            personid=idx,
             idx_vid=-1,
             idx_img=-1,
         )
