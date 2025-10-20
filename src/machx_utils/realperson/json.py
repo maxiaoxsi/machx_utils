@@ -38,8 +38,8 @@ class Json:
         return sum(1 for item in self._json["categories"] if item["supercategory"] == key_parent)
 
 
-    def get_categories(self, key_parent):
-        return [item["personid"] for item in self._json["categories"] if item["supercategory"] == key_parent]
+    def get_categories(self, keys_parent):
+        return [item["personid"] for item in self._json["categories"] if item["supercategory"] in keys_parent]
 
 
     def get_filename(self, id, is_img = False, is_annot = False, type = "reid"):
@@ -76,7 +76,6 @@ class Json:
         return path
 
 
-
     def get_imgid(self, id, is_annot = False):
         if is_annot:
             return self._json["annotations"][id]["imgid"]
@@ -106,6 +105,7 @@ class Json:
         while self._json["categories"][id]["supercategory"] != "-1":
             id = self._json["categories"][id]["supercategory"]
         return id
+
 
     def get_image_info(self, path_image):
         """获取图片的基本信息"""
@@ -392,6 +392,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             "right": [],
         }
         return item
+
 
     def get_categoryid(self, key, is_personid = False):
         if is_personid:

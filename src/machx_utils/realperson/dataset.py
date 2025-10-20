@@ -138,6 +138,20 @@ class Dataset:
         self._width_scale = width_scale
         self._height_scale = height_scale
         self._rate_random_erase = rate_random_erase
+        self._init_personid_list()
+
+    def _init_personid_list(self):
+        self._personid_list = []
+        for json_tgt in self._jsons_tgt:
+            personid_list = json_tgt.get_categories(["-1", -1])
+            for personid in personid_list:
+                if personid in self._personid_list:
+                    continue
+                for json_ref in self._jsons_ref:
+                    if personid in json_ref:
+                        self._personid_list.append(personid)
+                        break
+        print(self._personid_list)
         
 
     def __len__(self):
