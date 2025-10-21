@@ -151,7 +151,7 @@ class Dataset:
                     if personid in json_ref:
                         self._personid_list.append(personid)
                         break
-        print(self._personid_list)
+        # print(self._personid_list)
         
 
     def __len__(self):
