@@ -163,7 +163,7 @@ class Dataset:
 
 
     def __getitem__(self, idx):
-        img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref = self.get_item(
+        img_tgt, pose_tgt, render_tgt, vis_tgt, imgs_ref, poses_ref = self.get_item(
             personid=idx,
             imgid=-1,
         )
@@ -173,6 +173,7 @@ class Dataset:
             "img_tgt": img_tgt,
             "bkgd_tgt": bkgd_tgt,
             "pose_tgt": pose_tgt,
+            "vis_tgt": vis_tgt,
             "imgs_ref": imgs_ref,
             "reids_ref": reids_ref,
             "poses_ref": poses_ref,
@@ -181,8 +182,8 @@ class Dataset:
 
     def get_item_tgt(self, personid, imgid):
         json_tgt = random.choice(self._jsons_tgt)
-        img_tgt, pose_tgt, render_tgt = json_tgt.get_img_tgt(personid, imgid)
-        return img_tgt, pose_tgt, render_tgt
+        img_tgt, pose_tgt, render_tgt, vis_tgt = json_tgt.get_img_tgt(personid, imgid)
+        return img_tgt, pose_tgt, render_tgt, vis_tgt
 
 
     def random_select_simple(images, n):
@@ -205,9 +206,9 @@ class Dataset:
 
 
     def get_item(self, personid, imgid):
-        img_tgt, pose_tgt, render_tgt = self.get_item_tgt(personid, imgid)
+        img_tgt, pose_tgt, render_tgt, vis_tgt = self.get_item_tgt(personid, imgid)
         imgs_ref, poses_ref = self.get_item_ref(personid, 8)
-        return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref
+        return img_tgt, pose_tgt, render_tgt, vis_tgt, imgs_ref, poses_ref
 
 
     def get_img_tgt(self, img_tgt, pose_tgt, render_tgt):

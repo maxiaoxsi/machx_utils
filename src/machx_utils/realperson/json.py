@@ -140,6 +140,11 @@ class RealPersonJson(Json):
         return item in self._categories
 
 
+    def get_visible(self, id, is_img = False):
+        if is_img:
+            return self._json['images'][id]['visible']
+
+
     def get_fea_clipreid(self, annot):
         if isinstance(annot, int):
             annot = self._json["annotations"][annot]
@@ -207,7 +212,9 @@ class RealPersonJson(Json):
             imgid = images[imageid % len(images)] 
         img_tgt = self.get_path("reid", imgid, is_img=True)
         pose_tgt, render_tgt = self.get_pose_tgt(imgid)
-        return img_tgt, pose_tgt, render_tgt
+        vis_tgt = self.get_visible(imgid, is_img=True)
+        vis_tgt = f'a {vis_tgt} photo of a people.'
+        return img_tgt, pose_tgt, render_tgt, vis_tgt
 
     def get_img_ref(self, imgid):
         img_ref = self.get_path("reid", imgid, is_img=True)
