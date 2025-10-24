@@ -6,6 +6,7 @@ from machx_utils.realperson import RealPersonJson
 import torchvision.transforms.functional as F
 import numpy as np
 import torch
+import os
 
 
 class Scale2D:
@@ -122,11 +123,7 @@ class Dataset:
         is_select_bernl=True,
         is_select_repeat=True,
         rate_random_erase=0.5,
-        rate_dropout_ref=0.2,
         rate_dropout_back=0.2,
-        rate_dropout_manikin=0,
-        rate_dropout_skeleton=0.2,
-        rate_dropout_rgbguid=1,
         img_size=(512, 512),
         width_scale=(1, 1),
         height_scale=(1, 1),
@@ -138,6 +135,7 @@ class Dataset:
         self._width_scale = width_scale
         self._height_scale = height_scale
         self._rate_random_erase = rate_random_erase
+        self._rate_dropout_back = rate_dropout_back
         self._init_personid_list()
 
     def _init_personid_list(self):
@@ -163,27 +161,32 @@ class Dataset:
 
 
     def __getitem__(self, idx):
-        img_tgt, pose_tgt, render_tgt, vis_tgt, imgs_ref, poses_ref = self.get_item(
-            personid=idx,
+        personid = self._personid_list[idx]
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list = self.get_item(
+            personid=personid,
             imgid=-1,
         )
-        img_tgt, bkgd_tgt, pose_tgt = self.get_img_tgt(img_tgt, pose_tgt, render_tgt)
-        imgs_ref, reids_ref, poses_ref = self.get_imgs_ref(imgs_ref, poses_ref)
+        img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor = self.get_img_tgt(
+            img_tgt_list, pose_tgt_list, render_tgt_list
+        )
+        img_ref_tensor, reid_ref_tensor, pose_ref_tensor = self.get_imgs_ref(img_ref_list, pose_ref_list)
         return {
-            "img_tgt": img_tgt,
-            "bkgd_tgt": bkgd_tgt,
-            "pose_tgt": pose_tgt,
+            "img_tgt_tensor": img_tgt_tensor,
+            "bkgd_tgt_tensor": bkgd_tgt_tensor,
+            "pose_tgt_tensor": pose_tgt_tensor,
             "vis_tgt": vis_tgt,
-            "imgs_ref": imgs_ref,
-            "reids_ref": reids_ref,
-            "poses_ref": poses_ref,
+            "img_ref_tensor": img_ref_tensor,
+            "reid_ref_tensor": reid_ref_tensor,
+            "pose_ref_tensor": pose_ref_tensor,
+            "vis_ref_list": vis_ref_list,
         }
 
 
     def get_item_tgt(self, personid, imgid):
-        json_tgt = random.choice(self._jsons_tgt)
-        img_tgt, pose_tgt, render_tgt, vis_tgt = json_tgt.get_img_tgt(personid, imgid)
-        return img_tgt, pose_tgt, render_tgt, vis_tgt
+        jsons_tgt = [json for json in self._jsons_tgt if personid in json]
+        json_tgt = random.choice(jsons_tgt)
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt = json_tgt.get_img_tgt(personid, imgid)
+        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt
 
 
     def random_select_simple(images, n):
@@ -192,60 +195,81 @@ class Dataset:
 
 
     def get_item_ref(self, personid, n_max):
-        images = [json.get_images(personid) for json in self._jsons_ref]
+        jsons_ref = [json for json in self._jsons_ref if personid in json]
+        images = [json.get_images(personid) for json in jsons_ref]
         images = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
         n_max = random.randint(1, n_max)
         images_selected = random.sample(images, min(n_max, len(images)))
-        imgs_ref = []
-        poses_ref = []
+        img_ref_list = []
+        pose_ref_list = []
+        vis_ref_list = []
         for (i, imgid) in images_selected:
-            img_ref, pose_ref = self._jsons_ref[i].get_img_ref(imgid)
-            imgs_ref.append(img_ref)
-            poses_ref.append(pose_ref)
-        return imgs_ref, poses_ref
+            img_ref, pose_ref = jsons_ref[i].get_img_ref(imgid)
+            vis_ref = jsons_ref[i].get_visible(imgid)
+            img_ref_list.append(img_ref)
+            pose_ref_list.append(pose_ref)
+            vis_ref_list.append(vis_ref)
+        return img_ref_list, pose_ref_list, vis_ref_list
 
 
     def get_item(self, personid, imgid):
-        img_tgt, pose_tgt, render_tgt, vis_tgt = self.get_item_tgt(personid, imgid)
-        imgs_ref, poses_ref = self.get_item_ref(personid, 8)
-        return img_tgt, pose_tgt, render_tgt, vis_tgt, imgs_ref, poses_ref
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt = self.get_item_tgt(personid, imgid)
+        img_ref_list, pose_ref_list, vis_ref_list = self.get_item_ref(personid, 8)
+        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list
 
 
-    def get_img_tgt(self, img_tgt, pose_tgt, render_tgt):
+    def get_img_tgt(self, img_tgt_list, pose_tgt_list, render_tgt_list):
         transforms_set = TransformsSet(self._img_size, 
             self._width_scale, self._height_scale, self._rate_random_erase)
         from machx_utils.realperson import make_mask
-        _, _, bkgd_tgt = make_mask(img_tgt, render_tgt)
-        img_tgt = self.get_image_tensor(transforms_set, "norm", img_tgt)
-        pose_tgt = self.get_image_tensor(transforms_set, "norm", pose_tgt)
-        bkgd_tgt = self.get_image_tensor(transforms_set, "norm", bkgd_tgt)
-        return img_tgt, bkgd_tgt, pose_tgt
+        img_tgt_tensor_list = []
+        bkgd_tgt_tensor_list = []
+        pose_tgt_tensor_list = []
+        for (img_tgt, pose_tgt, render_tgt) in zip(
+            img_tgt_list, pose_tgt_list, render_tgt_list
+        ):
+            _, _, bkgd_tgt = make_mask(img_tgt, render_tgt)
+            if random.random() < self._rate_dropout_back:
+                bkgd_tgt = Image.new('RGB', bkgd_tgt.size, (0, 0, 0))
+            img_tgt_tensor = self.get_image_tensor(transforms_set, "norm", img_tgt)
+            pose_tgt_tensor = self.get_image_tensor(transforms_set, "norm", pose_tgt)
+            bkgd_tgt_tensor = self.get_image_tensor(transforms_set, "norm", bkgd_tgt)
+            img_tgt_tensor_list.append(img_tgt_tensor)
+            bkgd_tgt_tensor_list.append(bkgd_tgt_tensor)
+            pose_tgt_tensor_list.append(pose_tgt_tensor)
+        img_tgt_tensor = torch.stack(img_tgt_tensor_list, dim=0)
+        bkgd_tgt_tensor = torch.stack(bkgd_tgt_tensor_list, dim=0)
+        pose_tgt_tensor = torch.stack(pose_tgt_tensor_list, dim=0)
+        return img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor # (f c h w)
 
 
-    def get_imgs_ref(self, imgs_ref, poses_ref):
+    def get_imgs_ref(self, img_ref_list, pose_ref_list):
         transforms_set = TransformsSet(self._img_size, 
             self._width_scale, self._height_scale, self._rate_random_erase)
-        imgs_ref_list = []
-        reids_ref_list = []
-        poses_ref_list = []
-        for (img_ref, pose_ref) in zip(imgs_ref, poses_ref):
+        img_ref_tensor_list = []
+        reid_ref_tensor_list = []
+        pose_ref_tensor_list = []
+        for (img_ref, pose_ref) in zip(img_ref_list, pose_ref_list):
             transforms_set = TransformsSet(self._img_size, 
                 self._width_scale, self._height_scale, self._rate_random_erase)
-            reid_ref = self.get_image_tensor(transforms_set, "reid", img_ref)
-            img_ref = self.get_image_tensor(transforms_set, "ref", img_ref)
-            pose_ref = self.get_image_tensor(transforms_set, "norm", pose_ref)
-            imgs_ref_list.append(img_ref)
-            reids_ref_list.append(reid_ref)
-            poses_ref_list.append(pose_ref)
-        imgs_ref = torch.stack(imgs_ref_list, dim=0)
-        reids_ref = torch.stack(reids_ref_list, dim=0)
-        poses_ref = torch.stack(poses_ref_list, dim = 0)
-        return imgs_ref, reids_ref, poses_ref
+            img_ref_tensor = self.get_image_tensor(transforms_set, "ref", img_ref)
+            reid_ref_tensor = self.get_image_tensor(transforms_set, "reid", img_ref)
+            pose_ref_tensor = self.get_image_tensor(transforms_set, "norm", pose_ref)
+            img_ref_tensor_list.append(img_ref_tensor)
+            reid_ref_tensor_list.append(reid_ref_tensor)
+            pose_ref_tensor_list.append(pose_ref_tensor)
+        img_ref_tensor = torch.stack(img_ref_tensor_list, dim=0)
+        reid_ref_tensor = torch.stack(reid_ref_tensor_list, dim=0)
+        pose_ref_tensor = torch.stack(pose_ref_tensor_list, dim = 0)
+        return img_ref_tensor, reid_ref_tensor, pose_ref_tensor
 
     
     def get_image_tensor(self, transforms_set, type_tansform, image):
         if isinstance(image, str):
-            image = Image.open(image)
+            if os.path.exists(image):
+                image = Image.open(image)
+            else:
+                image = Image.new('RGB', (512, 512), (0, 0, 0))
         return transforms_set(type_tansform)(image)
 
 

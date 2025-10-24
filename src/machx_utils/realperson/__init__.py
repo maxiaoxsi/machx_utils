@@ -1,5 +1,5 @@
 from .json import RealPersonJsonInitializer, RealPersonJson
-from .json import MarketInitializer, SYSUMM01Initializer
+from .json import MarketInitializer, SYSUMM01Initializer, MARSInitializer
 from .dataset import Dataset
 from .mask import make_mask
 

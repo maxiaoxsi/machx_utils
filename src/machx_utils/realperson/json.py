@@ -20,6 +20,7 @@ class Json:
         jsonpath = self.get_dirname("annot") + ".json"
         if not os.path.exists(jsonpath):
             self._json = None
+            print(jsonpath)
             print("json file not exists!")
             return
         with open(jsonpath, 'r', encoding='utf-8') as f:
@@ -214,7 +215,7 @@ class RealPersonJson(Json):
         pose_tgt, render_tgt = self.get_pose_tgt(imgid)
         vis_tgt = self.get_visible(imgid, is_img=True)
         vis_tgt = f'a {vis_tgt} photo of a people.'
-        return img_tgt, pose_tgt, render_tgt, vis_tgt
+        return [img_tgt], [pose_tgt], [render_tgt], vis_tgt
 
     def get_img_ref(self, imgid):
         img_ref = self.get_path("reid", imgid, is_img=True)
@@ -299,7 +300,7 @@ class RealPersonJsonInitializer(RealPersonJson):
         self._init_json(year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid)
 
 
-    def _init_json(self, year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid):
+    def _init_json(self, year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid, is_sort=True):
         self._json = {
             "info": {
                 "year": year,
@@ -318,18 +319,22 @@ class RealPersonJsonInitializer(RealPersonJson):
             "licenses": [],
             "annotations": []
         }
-        self._init_images()
+        print(f"init json start!")
+        self._init_images(is_sort=is_sort)
         self._init_annot()
         self._init_categories()
         self.save_json()
 
 
-    def _init_images(self):
+    def _init_images(self, is_sort):
+        print(f"init images start!")
         dirname = self.get_dirname("reid")
         images = self.traverse_images(dirname)
-        images.sort(key=lambda x: (int(x['personid']), int(x['camid']), x["filename"]))
+        if is_sort:
+            images.sort(key=lambda x: (int(x['personid']), int(x['camid']), x["filename"]))
         images_new = []
         for i, image in enumerate(images):
+            print(f"init image {i}: {image['filename']}")
             image_new = {
                 "id": i,
                 "filename": image["filename"],
@@ -344,8 +349,10 @@ class RealPersonJsonInitializer(RealPersonJson):
 
     
     def _init_annot(self):
+        print("init annotations start!")
         id = 0
         for image in self._json['images']:
+            print(f"init annot for image {id}: {image['filename']}")
             path_skeleton = self.get_path("skeleton", image['filename'])
             path_render = self.get_path("render", image['filename'])
             path_smplx = self.get_path("smplx", image['filename'])
@@ -427,11 +434,13 @@ class RealPersonJsonInitializer(RealPersonJson):
     
 
     def _init_categories(self):
+        print("init categories start!")
         id = 0
         personids = []
         for image in self._json['images']:
             personid = image['personid']
             imgid = image['id']
+            print(f"init category for image {imgid}: {image['filename']}")
             if personid not in personids:
                 personids.append(personid)
                 categoryid = id
@@ -441,7 +450,7 @@ class RealPersonJsonInitializer(RealPersonJson):
             else:
                 categoryid = self.get_categoryid(personid, is_personid=True)
             self._add_img_to_category(categoryid, imgid)
-        self._init_reference()
+        # self._init_reference()
         
 
     def _init_reference(self):
@@ -481,6 +490,7 @@ class RealPersonJsonInitializer(RealPersonJson):
                     if width and height and id_person and id_camera:
                         filepath = os.path.join(root, file)
                         filesubpath = filepath[len(dirname)+1:]
+                        print(f"found image: {filesubpath}")
                         images.append({
                             "filename": filesubpath,
                             "height": height,
@@ -640,3 +650,31 @@ class DUKEInitializer(RealPersonJsonInitializer):
         return width, height, id_person, id_camera, "visible"
 
 
+
+
+class MARSInitializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
+                path_render, path_smplx, path_clipreid)
+    
+
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image)
+        if width is None:
+            return None, None, None, None, None
+        id_person = path_image.split('/')[-2]
+        id_camera = path_image.split('/')[-1].split('C')[1].split('T')[0]
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None, None
+        return width, height, id_person, id_camera, "visible"
