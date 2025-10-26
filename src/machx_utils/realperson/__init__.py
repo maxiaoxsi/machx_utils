@@ -66,6 +66,3 @@ def save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_re
     save_img(bkgd_tgt, dirname, "bkgd.jpg")
     
     
-
-
-

@@ -145,6 +145,9 @@ class RealPersonJson(Json):
         if is_img:
             return self._json['images'][id]['visible']
 
+    def get_datasetid(self):
+        return self._json['info']["datasetid"]
+
 
     def get_fea_clipreid(self, annot):
         if isinstance(annot, int):
@@ -288,6 +291,7 @@ class RealPersonJsonInitializer(RealPersonJson):
         self, 
         dirname, 
         subdataset, 
+        datasetid,
         year=2025,
         path_reid="image",
         path_skeleton="skeleton",
@@ -297,14 +301,15 @@ class RealPersonJsonInitializer(RealPersonJson):
     ) -> None:
         self._dirname = dirname
         self._subdataset = subdataset
-        self._init_json(year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid)
+        self._init_json(datasetid, year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid)
 
 
-    def _init_json(self, year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid, is_sort=True):
+    def _init_json(self, datasetid, year, path_reid, path_skeleton, path_render, path_smplx, path_clipreid, is_sort=True):
         self._json = {
             "info": {
                 "year": year,
                 "version": "1.0",
+                "datasetid": datasetid,
                 "subdataset": f"{self._subdataset}",
                 "description": f"RealPerson {self._dirname} {self._subdataset}.",
                 "reid": path_reid,
@@ -515,8 +520,17 @@ class MarketInitializer(RealPersonJsonInitializer):
         path_smplx="smplx", 
         path_clipreid="clipreid"
     ) -> None:
-        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
-                path_render, path_smplx, path_clipreid)
+        super().__init__(
+            dirname=dirname, 
+            datasetid="market", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
     
 
     def get_image_info(self, path_image, filename):
@@ -544,8 +558,17 @@ class SYSUMM01Initializer(RealPersonJsonInitializer):
         path_smplx="smplx", 
         path_clipreid="clipreid"
     ) -> None:
-        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
-                path_render, path_smplx, path_clipreid)
+        super().__init__(
+            dirname=dirname, 
+            datasetid="sysumm01", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
     
     def get_image_info(self, path_image, filename):
         """获取图片的基本信息"""
@@ -576,8 +599,17 @@ class MSMT17V1Initializer(RealPersonJsonInitializer):
         path_smplx="smplx", 
         path_clipreid="clipreid"
     ) -> None:
-        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
-                path_render, path_smplx, path_clipreid)
+        super().__init__(
+            dirname=dirname, 
+            datasetid="msmt17v1", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
     
 
     def get_image_info(self, path_image, filename):
@@ -605,8 +637,17 @@ class OCCReIDInitializer(RealPersonJsonInitializer):
         path_smplx="smplx", 
         path_clipreid="clipreid"
     ) -> None:
-        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
-                path_render, path_smplx, path_clipreid)
+        super().__init__(
+            dirname=dirname, 
+            datasetid="occreid", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
     
 
     def get_image_info(self, path_image, filename):
@@ -634,8 +675,17 @@ class DUKEInitializer(RealPersonJsonInitializer):
         path_smplx="smplx", 
         path_clipreid="clipreid"
     ) -> None:
-        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
-                path_render, path_smplx, path_clipreid)
+        super().__init__(
+            dirname=dirname, 
+            datasetid="duke", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
     
 
     def get_image_info(self, path_image, filename):
@@ -664,8 +714,17 @@ class MARSInitializer(RealPersonJsonInitializer):
         path_smplx="smplx", 
         path_clipreid="clipreid"
     ) -> None:
-        super().__init__(dirname, subdataset, year, path_reid, path_skeleton, 
-                path_render, path_smplx, path_clipreid)
+        super().__init__(
+            dirname=dirname, 
+            datasetid="market", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
     
 
     def get_image_info(self, path_image, filename):
