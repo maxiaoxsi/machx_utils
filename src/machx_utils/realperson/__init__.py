@@ -64,5 +64,8 @@ def save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_re
     save_img(img_tgt, dirname, "tgt.jpg")
     save_img(pose_tgt, dirname, "pose.jpg")
     save_img(bkgd_tgt, dirname, "bkgd.jpg")
+
+    def load_items_tensor(dirname):
+        
     
     

@@ -251,9 +251,10 @@ class RealPersonJson(Json):
                 exit()
             annotid = person["images"][imgid][0]
         img_tgt = self.get_path("reid", annotid, is_annot=True)
+        personid = self.get_personid(annotid, is_annot = True)
         pose_tgt, render_tgt = self.get_pose_tgt(annotid)
         imgs_ref, poses_ref = self.get_imgs_ref(annotid)
-        return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref
+        return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, personid
        
 
     def check_ext(self, filename, is_img = False):
