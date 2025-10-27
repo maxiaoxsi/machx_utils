@@ -120,14 +120,15 @@ class Dataset:
         self, 
         jsons_tgt,
         jsons_ref,
-        is_select_bernl=True,
-        is_select_repeat=True,
+        # is_select_bernl=True,
+        # is_select_repeat=True,
         rate_random_erase=0.5,
         rate_dropout_back=0.2,
         img_size=(512, 512),
         width_scale=(1, 1),
         height_scale=(1, 1),
         n_frame=10,
+        n_ref = 6,
     ) -> None:
         self._jsons_tgt = jsons_tgt
         self._jsons_ref = jsons_ref
@@ -136,6 +137,7 @@ class Dataset:
         self._height_scale = height_scale
         self._rate_random_erase = rate_random_erase
         self._rate_dropout_back = rate_dropout_back
+        self._n_ref = n_ref
         self._init_personid_list()
 
     def _init_personid_list(self):
@@ -162,7 +164,7 @@ class Dataset:
 
     def __getitem__(self, idx):
         personid = self._personid_list[idx]
-        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list = self.get_item(
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list, personid = self.get_item(
             personid=personid,
             imgid=-1,
         )
@@ -179,19 +181,21 @@ class Dataset:
             "reid_ref_tensor": reid_ref_tensor,
             "pose_ref_tensor": pose_ref_tensor,
             "vis_ref_list": vis_ref_list,
+            "personid": personid,
         }
+
+
+    def get_item(self, personid, imgid):
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, personid = self.get_item_tgt(personid, imgid)
+        img_ref_list, pose_ref_list, vis_ref_list = self.get_item_ref(personid, self._n_ref)
+        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list, personid
 
 
     def get_item_tgt(self, personid, imgid):
         jsons_tgt = [json for json in self._jsons_tgt if personid in json]
         json_tgt = random.choice(jsons_tgt)
-        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt = json_tgt.get_img_tgt(personid, imgid)
-        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt
-
-
-    def random_select_simple(images, n):
-        all_elements = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
-        return random.sample(all_elements, min(n, len(all_elements)))
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, personid = json_tgt.get_img_tgt(personid, imgid)
+        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, personid
 
 
     def get_item_ref(self, personid, n_max):
@@ -205,18 +209,19 @@ class Dataset:
         vis_ref_list = []
         for (i, imgid) in images_selected:
             img_ref, pose_ref = jsons_ref[i].get_img_ref(imgid)
-            vis_ref = jsons_ref[i].get_visible(imgid)
+            vis_ref = jsons_ref[i].get_visible(imgid, is_img=True)
             img_ref_list.append(img_ref)
             pose_ref_list.append(pose_ref)
             vis_ref_list.append(vis_ref)
         return img_ref_list, pose_ref_list, vis_ref_list
 
 
-    def get_item(self, personid, imgid):
-        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt = self.get_item_tgt(personid, imgid)
-        img_ref_list, pose_ref_list, vis_ref_list = self.get_item_ref(personid, 8)
-        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list
+    def random_select_simple(images, n):
+        all_elements = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
+        return random.sample(all_elements, min(n, len(all_elements)))
 
+
+    
 
     def get_img_tgt(self, img_tgt_list, pose_tgt_list, render_tgt_list):
         transforms_set = TransformsSet(self._img_size, 
@@ -242,6 +247,8 @@ class Dataset:
         pose_tgt_tensor = torch.stack(pose_tgt_tensor_list, dim=0)
         return img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor # (f c h w)
 
+
+    
 
     def get_imgs_ref(self, img_ref_list, pose_ref_list):
         transforms_set = TransformsSet(self._img_size, 

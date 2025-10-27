@@ -38,34 +38,36 @@ def save_items(img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, dirname):
     save_imgs(imgs_ref, os.path.join(dirname, "imgs_ref"))
     save_imgs(poses_ref, os.path.join(dirname, "poses_ref"))
 
-def save_items_tensor(img_tgt, bkgd_tgt, pose_tgt, imgs_ref, reids_ref, poses_ref, dirname):
+
+def save_item_tensor(img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor, vis_tgt, 
+        img_ref_tensor, reid_ref_tensor, pose_ref_tensor, vis_ref_list, dirname_sample):
     to_pil = transforms.Compose([
         transforms.Normalize(mean=[-1], std=[2]),
         transforms.ToPILImage(),
     ])
-    imgs_ref_pil = []
-    reids_ref_pil = []
-    poses_ref_pil = []
-    for i, img_ref in enumerate(imgs_ref):
+    img_ref_list = []
+    reid_ref_list = []
+    pose_ref_list = []
+    for i, img_ref in enumerate(img_ref_tensor):
         img_ref = to_pil(img_ref)
-        imgs_ref_pil.append(img_ref)
-    save_imgs(imgs_ref_pil, os.path.join(dirname, "imgs_ref"))
-    for i, reid_ref in enumerate(reids_ref):
+        img_ref_list.append(img_ref)
+    save_imgs(img_ref_list, os.path.join(dirname_sample, "img_ref_tensor"))
+    for i, reid_ref in enumerate(reid_ref_tensor):
         reid_ref = to_pil(reid_ref)
-        reids_ref_pil.append(reid_ref)
-    save_imgs(reids_ref_pil, os.path.join(dirname, "reids_ref"))
-    for i, pose_ref in enumerate(poses_ref):
+        reid_ref_list.append(reid_ref)
+    save_imgs(reid_ref_list, os.path.join(dirname_sample, "reid_ref_tensor"))
+    for i, pose_ref in enumerate(pose_ref_tensor):
         pose_ref = to_pil(pose_ref)
-        poses_ref_pil.append(pose_ref)
-    save_imgs(poses_ref_pil, os.path.join(dirname, "poses_ref"))
-    img_tgt = to_pil(img_tgt)
-    bkgd_tgt = to_pil(bkgd_tgt)
-    pose_tgt = to_pil(pose_tgt)
-    save_img(img_tgt, dirname, "tgt.jpg")
-    save_img(pose_tgt, dirname, "pose.jpg")
-    save_img(bkgd_tgt, dirname, "bkgd.jpg")
+        pose_ref_list.append(pose_ref)
+    save_imgs(pose_ref_list, os.path.join(dirname_sample, "pose_ref_tensor"))
+    img_tgt_pil = to_pil(img_tgt_tensor[0])
+    bkgd_tgt_pil = to_pil(bkgd_tgt_tensor[0])
+    pose_tgt_pil = to_pil(pose_tgt_tensor[0])
+    save_img(img_tgt_pil, dirname_sample, "img_tgt_tensor.jpg")
+    save_img(pose_tgt_pil, dirname_sample, "pose_tgt_tensor.jpg")
+    save_img(bkgd_tgt_pil, dirname_sample, "bkgd_tgt_tensor.jpg")
 
-    def load_items_tensor(dirname):
+    # def load_items_tensor(dirname):
         
     
     

@@ -186,9 +186,10 @@ class RealPersonJson(Json):
 
     def get_images(self, personid):
         '''
-        * para personid:int or str 
+        * para personid: int or str 
         * para imgid: int idx or img in categories['images']
         * ans images: list: [imgid]
+        * ans personid: str
         '''
         if isinstance(personid, int):
             images = self._json["categories"][personid]["images"]
@@ -208,17 +209,19 @@ class RealPersonJson(Json):
          * ans img_tgt: str, path
          * ans pose_tgt: str, path
          * ans render_tgt: str, path
+         * ans peronid: str
         '''
         images = self.get_images(personid)
+        if isinstance(personid, int):
+            personid = self.get_personid(personid, is_annot=True)
         if imageid <= -1:
             imgid = random.choice(images)
-        if imageid < len(images):
+        else:
             imgid = images[imageid % len(images)] 
         img_tgt = self.get_path("reid", imgid, is_img=True)
         pose_tgt, render_tgt = self.get_pose_tgt(imgid)
         vis_tgt = self.get_visible(imgid, is_img=True)
-        vis_tgt = f'a {vis_tgt} photo of a people.'
-        return [img_tgt], [pose_tgt], [render_tgt], vis_tgt
+        return [img_tgt], [pose_tgt], [render_tgt], vis_tgt, personid
 
     def get_img_ref(self, imgid):
         img_ref = self.get_path("reid", imgid, is_img=True)
@@ -226,35 +229,35 @@ class RealPersonJson(Json):
         return img_ref, pose_ref
 
 
-    def get_imgs_ref(self, personid, mode="shuffle", max_img = 5):
-        if mode == "shuffle":
-            gallery_sorted = self._json["annotations"][annotid]["gallery_sorted"]
-            num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
-            selected_images = random.sample(gallery_sorted, num_to_select)
-            imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
-            poses_ref = [self.get_pose_tgt(selected_annotid)[0] for selected_annotid in selected_images]
-            return imgs_ref, poses_ref
+    # def get_imgs_ref(self, personid, mode="shuffle", max_img = 5):
+    #     if mode == "shuffle":
+    #         gallery_sorted = self._json["annotations"][annotid]["gallery_sorted"]
+    #         num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
+    #         selected_images = random.sample(gallery_sorted, num_to_select)
+    #         imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
+    #         poses_ref = [self.get_pose_tgt(selected_annotid)[0] for selected_annotid in selected_images]
+    #         return imgs_ref, poses_ref
 
 
-    def get_item(
-        self,
-        personid, 
-        frameid, 
-        imgid,
-    ):
-        person = self._person[personid]
-        if imgid == -1:
-            annotid = random.choice(list(person["images"].values()))[0]
-        else:
-            if imgid not in person["images"]:
-                print("imgid key not found!")
-                exit()
-            annotid = person["images"][imgid][0]
-        img_tgt = self.get_path("reid", annotid, is_annot=True)
-        personid = self.get_personid(annotid, is_annot = True)
-        pose_tgt, render_tgt = self.get_pose_tgt(annotid)
-        imgs_ref, poses_ref = self.get_imgs_ref(annotid)
-        return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, personid
+    # def get_item(
+    #     self,
+    #     personid, 
+    #     frameid, 
+    #     imgid,
+    # ):
+    #     person = self._person[personid]
+    #     if imgid == -1:
+    #         annotid = random.choice(list(person["images"].values()))[0]
+    #     else:
+    #         if imgid not in person["images"]:
+    #             print("imgid key not found!")
+    #             exit()
+    #         annotid = person["images"][imgid][0]
+    #     img_tgt = self.get_path("reid", annotid, is_annot=True)
+    #     personid = self.get_personid(annotid, is_annot = True)
+    #     pose_tgt, render_tgt = self.get_pose_tgt(annotid)
+    #     imgs_ref, poses_ref = self.get_imgs_ref(annotid)
+    #     return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, personid
        
 
     def check_ext(self, filename, is_img = False):

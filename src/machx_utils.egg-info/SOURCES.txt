@@ -13,4 +13,5 @@ src/machx_utils/realperson/__init__.py
 src/machx_utils/realperson/dataset.py
 src/machx_utils/realperson/json.py
 src/machx_utils/realperson/mask.py
+src/machx_utils/realperson/style_encoder.py
 src/machx_utils/smplx/__init__.py
