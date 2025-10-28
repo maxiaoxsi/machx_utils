@@ -120,8 +120,6 @@ class Dataset:
         self, 
         jsons_tgt,
         jsons_ref,
-        # is_select_bernl=True,
-        # is_select_repeat=True,
         rate_random_erase=0.5,
         rate_dropout_back=0.2,
         img_size=(512, 512),

@@ -229,37 +229,6 @@ class RealPersonJson(Json):
         return img_ref, pose_ref
 
 
-    # def get_imgs_ref(self, personid, mode="shuffle", max_img = 5):
-    #     if mode == "shuffle":
-    #         gallery_sorted = self._json["annotations"][annotid]["gallery_sorted"]
-    #         num_to_select = random.randint(1, min(max_img, len(gallery_sorted)))
-    #         selected_images = random.sample(gallery_sorted, num_to_select)
-    #         imgs_ref = [self.get_path("reid", selected_annotid, is_annot=True) for selected_annotid in selected_images]
-    #         poses_ref = [self.get_pose_tgt(selected_annotid)[0] for selected_annotid in selected_images]
-    #         return imgs_ref, poses_ref
-
-
-    # def get_item(
-    #     self,
-    #     personid, 
-    #     frameid, 
-    #     imgid,
-    # ):
-    #     person = self._person[personid]
-    #     if imgid == -1:
-    #         annotid = random.choice(list(person["images"].values()))[0]
-    #     else:
-    #         if imgid not in person["images"]:
-    #             print("imgid key not found!")
-    #             exit()
-    #         annotid = person["images"][imgid][0]
-    #     img_tgt = self.get_path("reid", annotid, is_annot=True)
-    #     personid = self.get_personid(annotid, is_annot = True)
-    #     pose_tgt, render_tgt = self.get_pose_tgt(annotid)
-    #     imgs_ref, poses_ref = self.get_imgs_ref(annotid)
-    #     return img_tgt, pose_tgt, render_tgt, imgs_ref, poses_ref, personid
-       
-
     def check_ext(self, filename, is_img = False):
         image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
         if is_img:
@@ -287,7 +256,6 @@ class RealPersonJson(Json):
                 data_batch["tgt_list"] = []
         if data_batch["image_list"] is not []:
             process_method(data_batch)
-
 
 
 class RealPersonJsonInitializer(RealPersonJson):

@@ -2,6 +2,7 @@ from .json import RealPersonJsonInitializer, RealPersonJson
 from .json import MarketInitializer, SYSUMM01Initializer, MARSInitializer
 from .dataset import Dataset
 from .mask import make_mask
+from .style_encoder import StyleDataset, StyleJson
 
 import os
 import enum
@@ -68,6 +69,3 @@ def save_item_tensor(img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor, vis_tgt,
     save_img(bkgd_tgt_pil, dirname_sample, "bkgd_tgt_tensor.jpg")
 
     # def load_items_tensor(dirname):
-        
-    
-    
