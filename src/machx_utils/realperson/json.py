@@ -30,6 +30,9 @@ class Json:
     def save_json(self):
         jsonpath = self.get_dirname("annot") + ".json"
         version = self._json['info']['version']
+        dirname = os.path.dirname(jsonpath)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname)
         with open(f"{jsonpath}_{version}", 'w', encoding='utf-8') as f:
             print(f"file saved in {jsonpath}_{version}")
             json.dump(self._json, f, indent=4)
