@@ -1,8 +1,9 @@
 from .json import RealPersonJsonInitializer, RealPersonJson
 from .json import MarketInitializer, SYSUMM01Initializer, MARSInitializer
+from .json import MSMT17V1Initializer, MSMT17V2Initializer, DUKEInitializer, OCCReIDInitializer
 from .dataset import Dataset
 from .mask import make_mask
-from .style_encoder import StyleDataset, StyleJson
+from .style_dataset import StyleDataset
 
 import os
 import enum

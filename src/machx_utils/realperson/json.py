@@ -137,6 +137,10 @@ class RealPersonJson(Json):
             self._categories[personid] = category
 
         
+    def __len__(self):
+        return len(self._json['images'])
+
+
     def __contains__(self, item):
         return item in self._categories
 
@@ -198,6 +202,11 @@ class RealPersonJson(Json):
         return images
 
 
+    def get_camid(self, id, is_img = False):
+        if is_img:
+            return self._json['images'][id]['camid']
+
+
     def get_img_tgt(
         self, 
         personid,
@@ -230,7 +239,7 @@ class RealPersonJson(Json):
 
 
     def check_ext(self, filename, is_img = False):
-        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tif'}
         if is_img:
             return any(filename.lower().endswith(ext) for ext in image_extensions)
 
@@ -594,6 +603,46 @@ class MSMT17V1Initializer(RealPersonJsonInitializer):
         if not id_person.isdigit() or int(id_person) < 1:
             return None, None, None, None, None  
         return width, height, id_person, id_camera, "visible"
+
+
+
+
+class MSMT17V2Initializer(RealPersonJsonInitializer):
+    def __init__(
+        self, 
+        dirname, 
+        subdataset, 
+        year=2025, 
+        path_reid="image", 
+        path_skeleton="skeleton", 
+        path_render="render", 
+        path_smplx="smplx", 
+        path_clipreid="clipreid"
+    ) -> None:
+        super().__init__(
+            dirname=dirname, 
+            datasetid="msmt17v2", 
+            subdataset=subdataset, 
+            year=year, 
+            path_reid=path_reid, 
+            path_skeleton=path_skeleton, 
+            path_render=path_render, 
+            path_smplx=path_smplx, 
+            path_clipreid=path_clipreid
+        )
+    
+
+    def get_image_info(self, path_image, filename):
+        """获取图片的基本信息"""
+        width, height = super().get_image_info(path_image)
+        if width is None:
+            return None, None, None, None, None
+        id_person = filename.split('_')[0]
+        id_camera = filename.split('_')[2]
+        if not id_person.isdigit() or int(id_person) < 1:
+            return None, None, None, None, None  
+        return width, height, id_person, id_camera, "visible"
+
 
 
 
