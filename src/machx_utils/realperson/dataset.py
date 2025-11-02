@@ -6,7 +6,10 @@ from machx_utils.realperson import RealPersonJson
 import torchvision.transforms.functional as F
 import numpy as np
 import torch
+import torch.nn as nn
+from einops import rearrange
 import os
+
 
 
 class Scale2D:
@@ -19,6 +22,7 @@ class Scale2D:
         if h == self.height and w == self.width:
             return img
         return img.resize((self.width, self.height), self.interpolation)
+
 
 
 class Scale1D:
@@ -35,6 +39,7 @@ class Scale1D:
             width_tgt = int(self._size_tgt / h * w)
             height_tgt = self._size_tgt
         return img.resize((width_tgt, height_tgt), self._interpolation)
+
 
 
 class RandomCrop:
@@ -60,6 +65,7 @@ class RandomCrop:
         return img.crop((w_start, h_start, w_end, h_end))
 
 
+
 class PadToBottomRight:
     def __init__(self, target_size, fill=0):
         self.target_size = target_size  # 目标尺寸 (W, H)
@@ -78,39 +84,82 @@ class PadToBottomRight:
         return img_padded
 
 
+
+class PatchShuffler(nn.Module):
+    """一个用于随机打乱图像块的模块（单张图像版本）"""
+    def __init__(self, patch_size: int = 16):
+        super().__init__()
+        self.patch_size = patch_size
+
+    def forward(self, image: torch.Tensor) -> torch.Tensor:
+        """
+        输入: image tensor of shape (C, H, W)
+        输出: shuffled image tensor of shape (C, H, W)
+        """
+            
+        C, H, W = image.shape
+        p = self.patch_size
+        
+        # 将图像分割成 patches: (C, H, W) -> (Num_Patches, C, Patch_H, Patch_W)
+        patches = rearrange(image, 'c (h p1) (w p2) -> (h w) c p1 p2', p1=p, p2=p)
+        num_patches = patches.shape[0]
+
+        # 生成随机索引
+        rand_indices = torch.randperm(num_patches, device=image.device)
+        
+        # 根据随机索引打乱 patches
+        shuffled_patches = patches[rand_indices]
+        
+        # 重新拼接成图像
+        h_patches = H // p
+        w_patches = W // p
+        shuffled_image = rearrange(shuffled_patches, '(h w) c p1 p2 -> c (h p1) (w p2)', 
+                                  h=h_patches, w=w_patches, p1=p, p2=p)
+        return shuffled_image
+
+
+
+
 class TransformsSet:
     def __init__(self, img_size, width_scale, height_scale, rate_random_erase) -> None:
         random_crop = RandomCrop(width_scale, height_scale)
         self._transforms = {}
 
-        self._transforms["reid"]=transforms.Compose(
-            [
-                Scale2D(128, 256),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5],std=[0.5]),
-            ]
-        )
+        self._transforms["reid"]=transforms.Compose([
+            Scale2D(128, 256),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5],std=[0.5]),
+        ])
 
-        self._transforms["ref"] = transforms.Compose(
-            [
-                random_crop,
-                Scale1D(img_size[0]),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5], std=[0.5]),
-                transforms.RandomErasing(p=rate_random_erase, scale=(0.12, 0.37), ratio=(0.3, 3.3), value=0, inplace=False),
-                PadToBottomRight(target_size=img_size, fill=0),
-            ]
-        ) 
+        self._transforms["ref"] = transforms.Compose([
+            random_crop,
+            Scale1D(img_size[0]),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5]),
+            transforms.RandomErasing(p=rate_random_erase, scale=(0.12, 0.37), ratio=(0.3, 3.3), value=0, inplace=False),
+            PadToBottomRight(target_size=img_size, fill=0),
+        ]) 
         
-        self._transforms["norm"] = transforms.Compose(
-            [
-                random_crop,
-                Scale1D(img_size[0]),
-                transforms.ToTensor(),
-                transforms.Normalize(mean=[0.5], std=[0.5]),
-                PadToBottomRight(target_size=img_size, fill=0),
-            ]
-        )
+        self._transforms["norm"] = transforms.Compose([
+            random_crop,
+            Scale1D(img_size[0]),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5], std=[0.5]),
+            PadToBottomRight(target_size=img_size, fill=0),
+        ])
+
+        self._transforms["domain"] = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.RandomResizedCrop(224, scale=(0.8, 1.0), antialias=True),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        self._transforms["style"] = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.RandomResizedCrop(224, scale=(0.8, 1.0), antialias=True),
+            PatchShuffler(patch_size=16),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
 
     def __call__(self, type):
         return self._transforms[type]
@@ -166,7 +215,7 @@ class Dataset:
             personid=personid,
             imgid=-1,
         )
-        img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor = self.get_img_tgt(
+        img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor, domain_tgt_tensor, style_tgt_tensor = self.get_img_tgt(
             img_tgt_list, pose_tgt_list, render_tgt_list
         )
         img_ref_tensor, reid_ref_tensor, pose_ref_tensor = self.get_imgs_ref(img_ref_list, pose_ref_list)
@@ -174,6 +223,8 @@ class Dataset:
             "img_tgt_tensor": img_tgt_tensor,
             "bkgd_tgt_tensor": bkgd_tgt_tensor,
             "pose_tgt_tensor": pose_tgt_tensor,
+            "domain_tgt_tensor": domain_tgt_tensor,
+            "style_tgt_tensor": style_tgt_tensor,
             "vis_tgt": vis_tgt,
             "img_ref_tensor": img_ref_tensor,
             "reid_ref_tensor": reid_ref_tensor,
@@ -228,6 +279,8 @@ class Dataset:
         img_tgt_tensor_list = []
         bkgd_tgt_tensor_list = []
         pose_tgt_tensor_list = []
+        domain_tgt_tensor_list = []
+        style_tgt_tensor_list = []
         for (img_tgt, pose_tgt, render_tgt) in zip(
             img_tgt_list, pose_tgt_list, render_tgt_list
         ):
@@ -237,13 +290,19 @@ class Dataset:
             img_tgt_tensor = self.get_image_tensor(transforms_set, "norm", img_tgt)
             pose_tgt_tensor = self.get_image_tensor(transforms_set, "norm", pose_tgt)
             bkgd_tgt_tensor = self.get_image_tensor(transforms_set, "norm", bkgd_tgt)
+            domain_tgt_tensor = self.get_image_tensor(transforms_set, "domain", img_tgt)
+            style_tgt_tensor = self.get_image_tensor(transforms_set, "style", img_tgt)
             img_tgt_tensor_list.append(img_tgt_tensor)
             bkgd_tgt_tensor_list.append(bkgd_tgt_tensor)
             pose_tgt_tensor_list.append(pose_tgt_tensor)
+            domain_tgt_tensor_list.append(domain_tgt_tensor)
+            style_tgt_tensor_list.append(style_tgt_tensor)
         img_tgt_tensor = torch.stack(img_tgt_tensor_list, dim=0)
         bkgd_tgt_tensor = torch.stack(bkgd_tgt_tensor_list, dim=0)
         pose_tgt_tensor = torch.stack(pose_tgt_tensor_list, dim=0)
-        return img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor # (f c h w)
+        domain_tgt_tensor = torch.stack(domain_tgt_tensor_list, dim=0)
+        style_tgt_tensor = torch.stack(style_tgt_tensor_list, dim=0)
+        return img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor, domain_tgt_tensor, style_tgt_tensor
 
 
     
@@ -263,6 +322,7 @@ class Dataset:
             img_ref_tensor_list.append(img_ref_tensor)
             reid_ref_tensor_list.append(reid_ref_tensor)
             pose_ref_tensor_list.append(pose_ref_tensor)
+    
         img_ref_tensor = torch.stack(img_ref_tensor_list, dim=0)
         reid_ref_tensor = torch.stack(reid_ref_tensor_list, dim=0)
         pose_ref_tensor = torch.stack(pose_ref_tensor_list, dim = 0)
