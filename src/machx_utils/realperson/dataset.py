@@ -176,6 +176,7 @@ class Dataset:
         height_scale=(1, 1),
         n_frame=10,
         n_ref = 6,
+        mode='views', # ['views', 'random', 'views+']
     ) -> None:
         self._jsons_tgt = jsons_tgt
         self._jsons_ref = jsons_ref
@@ -185,6 +186,7 @@ class Dataset:
         self._rate_random_erase = rate_random_erase
         self._rate_dropout_back = rate_dropout_back
         self._n_ref = n_ref
+        self._mode = mode
         self._init_personid_list()
 
     def _init_personid_list(self):
@@ -246,17 +248,38 @@ class Dataset:
         img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, personid = json_tgt.get_img_tgt(personid, imgid)
         return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, personid
 
+    
+    def get_img_selected(self, imgsetid, n_img, jsons_ref, personid):
+        if n_img <= 0:
+            return []
+        images = [json.get_images(personid, imgsetid) for json in jsons_ref]
+        images = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
+        img_selected = random.sample(images, min(n_img, len(images)))
+        return img_selected
+        
+    
 
     def get_item_ref(self, personid, n_max):
         jsons_ref = [json for json in self._jsons_ref if personid in json]
-        images = [json.get_images(personid) for json in jsons_ref]
-        images = [(i, imgid) for i, subimages in enumerate(images) for imgid in subimages]
-        n_max = random.randint(1, n_max)
-        images_selected = random.sample(images, min(n_max, len(images)))
+        img_selected = []
+        if self._mode in ['views', 'views+']:
+            img_selected_front = self.get_img_selected("front", 1, jsons_ref, personid)
+            img_selected_back = self.get_img_selected("back", 1, jsons_ref, personid) 
+            img_selected_left = self.get_img_selected("left", 1, jsons_ref, personid)
+            img_selected_right = self.get_img_selected("right", 1, jsons_ref, personid)
+            img_selected = img_selected_front + img_selected_back + img_selected_left + img_selected_right
+            random.shuffle(img_selected)
+        if self._mode in ['views+']:
+            n_img = n_max - len(img_selected)
+            n_img = random.randint(1, n_img)
+        if self._mode in ['random']:
+            n_img = random.randint(1, n_max)
+        if self._mode in ['views+', 'random']:
+            img_selected = img_selected + self.get_img_selected("images", n_img, jsons_ref)
         img_ref_list = []
         pose_ref_list = []
         vis_ref_list = []
-        for (i, imgid) in images_selected:
+        for (i, imgid) in img_selected:
             img_ref, pose_ref = jsons_ref[i].get_img_ref(imgid)
             vis_ref = jsons_ref[i].get_visible(imgid, is_img=True)
             img_ref_list.append(img_ref)

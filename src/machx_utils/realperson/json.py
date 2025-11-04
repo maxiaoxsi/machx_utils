@@ -191,7 +191,7 @@ class RealPersonJson(Json):
                 return skeleton_tgt, render_tgt
 
 
-    def get_images(self, personid):
+    def get_images(self, personid, imgsetid):
         '''
         * para personid: int or str 
         * para imgid: int idx or img in categories['images']
@@ -199,9 +199,9 @@ class RealPersonJson(Json):
         * ans personid: str
         '''
         if isinstance(personid, int):
-            images = self._json["categories"][personid]["images"]
+            images = self._json["categories"][personid][imgsetid]
         elif isinstance(personid, str):
-            images = self._categories[personid]["images"]
+            images = self._categories[personid][imgsetid]
         return images
 
 
@@ -223,7 +223,7 @@ class RealPersonJson(Json):
          * ans render_tgt: str, path
          * ans peronid: str
         '''
-        images = self.get_images(personid)
+        images = self.get_images(personid, "images")
         if isinstance(personid, int):
             personid = self.get_personid(personid, is_annot=True)
         if imageid <= -1:
