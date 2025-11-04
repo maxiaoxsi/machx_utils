@@ -217,6 +217,8 @@ class Dataset:
             personid=personid,
             imgid=-1,
         )
+        if len(img_ref_list) == 0:
+            return self[(idx + 1) % len(self)]
         img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor, domain_tgt_tensor, style_tgt_tensor = self.get_img_tgt(
             img_tgt_list, pose_tgt_list, render_tgt_list
         )
