@@ -213,7 +213,7 @@ class Dataset:
 
     def __getitem__(self, idx):
         personid = self._personid_list[idx]
-        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list, personid = self.get_item(
+        img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, vis_ref_list, personid = self.get_item(
             personid=personid,
             imgid=-1,
         )
@@ -222,7 +222,7 @@ class Dataset:
         img_tgt_tensor, bkgd_tgt_tensor, pose_tgt_tensor, domain_tgt_tensor, style_tgt_tensor = self.get_img_tgt(
             img_tgt_list, pose_tgt_list, render_tgt_list
         )
-        img_ref_tensor, reid_ref_tensor, pose_ref_tensor = self.get_imgs_ref(img_ref_list, pose_ref_list)
+        img_ref_tensor, reid_ref_tensor = self.get_imgs_ref(img_ref_list)
         return {
             "img_tgt_tensor": img_tgt_tensor,
             "bkgd_tgt_tensor": bkgd_tgt_tensor,
@@ -232,7 +232,6 @@ class Dataset:
             "vis_tgt": vis_tgt,
             "img_ref_tensor": img_ref_tensor,
             "reid_ref_tensor": reid_ref_tensor,
-            "pose_ref_tensor": pose_ref_tensor,
             "vis_ref_list": vis_ref_list,
             "personid": personid,
         }
@@ -240,8 +239,8 @@ class Dataset:
 
     def get_item(self, personid, imgid):
         img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, personid = self.get_item_tgt(personid, imgid)
-        img_ref_list, pose_ref_list, vis_ref_list = self.get_item_ref(personid, self._n_ref)
-        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, pose_ref_list, vis_ref_list, personid
+        img_ref_list, vis_ref_list = self.get_item_ref(personid, self._n_ref)
+        return img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, img_ref_list, vis_ref_list, personid
 
 
     def get_item_tgt(self, personid, imgid):
@@ -282,12 +281,11 @@ class Dataset:
         pose_ref_list = []
         vis_ref_list = []
         for (i, imgid) in img_selected:
-            img_ref, pose_ref = jsons_ref[i].get_img_ref(imgid)
+            img_ref, _ = jsons_ref[i].get_img_ref(imgid)
             vis_ref = jsons_ref[i].get_visible(imgid, is_img=True)
             img_ref_list.append(img_ref)
-            pose_ref_list.append(pose_ref)
             vis_ref_list.append(vis_ref)
-        return img_ref_list, pose_ref_list, vis_ref_list
+        return img_ref_list, vis_ref_list
 
 
     def random_select_simple(images, n):
@@ -332,26 +330,24 @@ class Dataset:
 
     
 
-    def get_imgs_ref(self, img_ref_list, pose_ref_list):
+    def get_imgs_ref(self, img_ref_list):
         transforms_set = TransformsSet(self._img_size, 
             self._width_scale, self._height_scale, self._rate_random_erase)
+        
         img_ref_tensor_list = []
         reid_ref_tensor_list = []
-        pose_ref_tensor_list = []
-        for (img_ref, pose_ref) in zip(img_ref_list, pose_ref_list):
+        
+        for img_ref in img_ref_list:
             transforms_set = TransformsSet(self._img_size, 
                 self._width_scale, self._height_scale, self._rate_random_erase)
             img_ref_tensor = self.get_image_tensor(transforms_set, "ref", img_ref)
             reid_ref_tensor = self.get_image_tensor(transforms_set, "reid", img_ref)
-            pose_ref_tensor = self.get_image_tensor(transforms_set, "norm", pose_ref)
             img_ref_tensor_list.append(img_ref_tensor)
             reid_ref_tensor_list.append(reid_ref_tensor)
-            pose_ref_tensor_list.append(pose_ref_tensor)
     
         img_ref_tensor = torch.stack(img_ref_tensor_list, dim=0)
         reid_ref_tensor = torch.stack(reid_ref_tensor_list, dim=0)
-        pose_ref_tensor = torch.stack(pose_ref_tensor_list, dim = 0)
-        return img_ref_tensor, reid_ref_tensor, pose_ref_tensor
+        return img_ref_tensor, reid_ref_tensor
 
     
     def get_image_tensor(self, transforms_set, type_tansform, image):

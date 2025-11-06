@@ -102,12 +102,11 @@ def load_list_with_json(filename):
     return data['list']
     
 
-def save_sample(img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, 
+def save_sample(img_tgt_list, render_tgt_list, vis_tgt, 
             img_ref_list, pose_ref_list, vis_ref_list, dirname_root):
     save_imgs(img_ref_list, os.path.join(dirname_root, "img_ref"))
     save_imgs(pose_ref_list, os.path.join(dirname_root, "pose_ref"))
     save_imgs(img_tgt_list, os.path.join(dirname_root, "img_tgt"))
-    save_imgs(pose_tgt_list, os.path.join(dirname_root, "pose_tgt"))
     save_imgs(render_tgt_list, os.path.join(dirname_root, "render_tgt"))
     save_list_with_json(vis_ref_list, os.path.join(dirname_root, "vis_ref_list.json"))
     save_list_with_json(vis_tgt, os.path.join(dirname_root, "vis_tgt.json"))
@@ -136,10 +135,6 @@ def load_sample(dirname_sample):
     )
     vis_ref_list = load_list_with_json(os.path.join(dirname_sample, "vis_ref_list.json"))
 
-    pose_tgt_tensor = load_imgs(
-        os.path.join(dirname_sample, "pose_tgt"),
-        transforms_set("norm")
-    )
     bkgd_tgt_tensor = load_imgs_bkgd(
         os.path.join(dirname_sample, "img_tgt"),
         os.path.join(dirname_sample, "render_tgt"),
@@ -162,7 +157,6 @@ def load_sample(dirname_sample):
         'reid_ref_tensor': reid_ref_tensor,
         'pose_ref_tensor': pose_ref_tensor,
         'vis_ref_list': vis_ref_list,
-        'pose_tgt_tensor': pose_tgt_tensor,
         'bkgd_tgt_tensor': bkgd_tgt_tensor,
         'domain_tgt_tensor': domain_tgt_tensor,
         'style_tgt_tensor': style_tgt_tensor,
@@ -206,7 +200,6 @@ def save_batch(batch, dirname_sample):
             dirname_sample=dirname_batch,
             img_tgt_tensor = batch["img_tgt_tensor"][i] if "img_tgt_tensor" in batch else None,
             bkgd_tgt_tensor = batch["bkgd_tgt_tensor"][i],
-            pose_tgt_tensor = batch["pose_tgt_tensor"][i],
             domain_tgt_tensor = batch["domain_tgt_tensor"][i],
             style_tgt_tensor = batch["style_tgt_tensor"][i],
             img_ref_tensor = batch["img_ref_tensor"][i],
@@ -234,7 +227,7 @@ def save_imgs_tensor(dirname, transform, img_tensor, attention_mask=None):
 # just for check
 def save_item_tensor(
     dirname_sample,
-    img_tgt_tensor=None, bkgd_tgt_tensor=None, pose_tgt_tensor=None, 
+    img_tgt_tensor=None, bkgd_tgt_tensor=None,
     domain_tgt_tensor=None, style_tgt_tensor=None, 
     img_ref_tensor=None, reid_ref_tensor=None, pose_ref_tensor=None, attention_mask=None
 ):
@@ -259,9 +252,6 @@ def save_item_tensor(
     if bkgd_tgt_tensor is not None:
         dirname_tgt = os.path.join(dirname_sample, "bkgd_tgt")
         save_imgs_tensor(dirname_tgt, to_pil, bkgd_tgt_tensor)
-    if pose_tgt_tensor is not None:
-        dirname_tgt = os.path.join(dirname_sample, "pose_tgt")
-        save_imgs_tensor(dirname_tgt, to_pil, pose_tgt_tensor)
     if domain_tgt_tensor is not None:
         dirname_ref = os.path.join(dirname_sample, "domain_tgt")
         save_imgs_tensor(dirname_ref, to_pil_imgnet, domain_tgt_tensor)
