@@ -18,6 +18,30 @@ def check_ext(filename, is_img = False):
         return any(filename.lower().endswith(ext) for ext in image_extensions)
 
 
+def crop_img_gen(img_pil, img_tensor):
+    if img_tensor.ndim == 3:
+        C, H, W = img_tensor.shape
+    elif img_tensor.ndim == 2:
+        C = None
+        H, W = img_tensor.shape
+    w_pil, h_pil = img_pil.size
+    if w_pil >= h_pil:
+        new_w = W
+        new_h = int(h_pil * W / w_pil)
+    else:
+        new_h = H
+        new_w = int(w_pil * H / h_pil)
+    cropped_tensor = img_tensor[:, :new_h, :new_w]
+    if C is not None:
+        cropped_tensor = img_tensor[:, :new_h, :new_w]
+    else:
+        cropped_tensor = img_tensor[:new_h, :new_w]
+    to_pil = transforms.ToPILImage()
+    cropped_pil = to_pil(cropped_tensor)
+    return cropped_pil
+
+
+
 def save_img(img, dirname, filename):
     if img is None:
         img = Image.new('RGB', (128, 256), color='black')
@@ -67,18 +91,22 @@ def load_imgs_bkgd(dirname_tgt, dirname_render, transform):
     img_tensor = torch.stack(img_tensors, dim = 0)
     return img_tensor
 
-
-def load_imgs(dir_path, transform):
-    """加载目录中的所有图像并转换为张量"""
-    img_tensors = []
+def load_imgs_pil(dir_path):
+    img_pil_list = []
     if os.path.exists(dir_path):
         for img_file in sorted(os.listdir(dir_path)):
             if check_ext(img_file, is_img=True):
                 img_path = os.path.join(dir_path, img_file)
                 img = Image.open(img_path)
-                img_tensor = transform(img)
-                img_tensors.append(img_tensor)
-    img_tensor = torch.stack(img_tensors, dim = 0)
+                img_pil_list.append(img)
+    return img_pil_list
+
+
+def load_imgs(dir_path, transform):
+    """加载目录中的所有图像并转换为张量"""
+    img_pil_list = load_imgs_pil(dir_path)
+    img_tensor_list = [transform(img_pil) for img_pil in img_pil_list]
+    img_tensor = torch.stack(img_tensor_list, dim = 0)
     return img_tensor
 
 
@@ -102,14 +130,14 @@ def load_list_with_json(filename):
     return data['list']
     
 
-def save_sample(img_tgt_list, render_tgt_list, vis_tgt, 
-            img_ref_list, pose_ref_list, vis_ref_list, dirname_root):
-    save_imgs(img_ref_list, os.path.join(dirname_root, "img_ref"))
-    save_imgs(pose_ref_list, os.path.join(dirname_root, "pose_ref"))
+def save_sample(img_tgt_list, pose_tgt_list, render_tgt_list, vis_tgt, 
+            img_ref_list, vis_ref_list, dirname_root):
     save_imgs(img_tgt_list, os.path.join(dirname_root, "img_tgt"))
+    save_imgs(pose_tgt_list, os.path.join(dirname_root, "pose_tgt"))
     save_imgs(render_tgt_list, os.path.join(dirname_root, "render_tgt"))
-    save_list_with_json(vis_ref_list, os.path.join(dirname_root, "vis_ref_list.json"))
     save_list_with_json(vis_tgt, os.path.join(dirname_root, "vis_tgt.json"))
+    save_imgs(img_ref_list, os.path.join(dirname_root, "img_ref"))
+    save_list_with_json(vis_ref_list, os.path.join(dirname_root, "vis_ref_list.json"))
 
     
 def load_sample(dirname_sample):
@@ -120,21 +148,12 @@ def load_sample(dirname_sample):
         height_scale=(1, 1), 
         rate_random_erase=0
     )
-    
-    img_ref_tensor = load_imgs(
-        os.path.join(dirname_sample, "img_ref"), 
-        transforms_set("norm")
-    )
-    reid_ref_tensor = load_imgs(
-        os.path.join(dirname_sample, "img_ref"),
-        transforms_set("reid")
-    )
-    pose_ref_tensor = load_imgs(
-        os.path.join(dirname_sample, "pose_ref"),
-        transforms_set("norm")
-    )
-    vis_ref_list = load_list_with_json(os.path.join(dirname_sample, "vis_ref_list.json"))
 
+    pose_tgt_pil = load_imgs_pil(os.path.join(dirname_sample, "img_tgt"))
+    pose_tgt_tensor = load_imgs(
+        os.path.join(dirname_sample, "pose_tgt"),
+        transforms_set("norm")
+    )
     bkgd_tgt_tensor = load_imgs_bkgd(
         os.path.join(dirname_sample, "img_tgt"),
         os.path.join(dirname_sample, "render_tgt"),
@@ -150,17 +169,28 @@ def load_sample(dirname_sample):
     )
     vis_tgt = load_list_with_json(os.path.join(dirname_sample, "vis_tgt.json"))
 
+    img_ref_tensor = load_imgs(
+        os.path.join(dirname_sample, "img_ref"), 
+        transforms_set("norm")
+    )
+    reid_ref_tensor = load_imgs(
+        os.path.join(dirname_sample, "img_ref"),
+        transforms_set("reid")
+    )
+    vis_ref_list = load_list_with_json(os.path.join(dirname_sample, "vis_ref_list.json"))
+
     personid = dirname_sample.split("/")[-1]
     
     return {
-        'img_ref_tensor': img_ref_tensor,
-        'reid_ref_tensor': reid_ref_tensor,
-        'pose_ref_tensor': pose_ref_tensor,
-        'vis_ref_list': vis_ref_list,
+        'pose_tgt_pil': pose_tgt_pil,
+        'pose_tgt_tensor': pose_tgt_tensor,
         'bkgd_tgt_tensor': bkgd_tgt_tensor,
         'domain_tgt_tensor': domain_tgt_tensor,
         'style_tgt_tensor': style_tgt_tensor,
         'vis_tgt': vis_tgt,
+        'img_ref_tensor': img_ref_tensor,
+        'reid_ref_tensor': reid_ref_tensor,
+        'vis_ref_list': vis_ref_list,
         'personid': personid,
         'dirname': dirname_sample,
     }
@@ -199,12 +229,12 @@ def save_batch(batch, dirname_sample):
         save_item_tensor(
             dirname_sample=dirname_batch,
             img_tgt_tensor = batch["img_tgt_tensor"][i] if "img_tgt_tensor" in batch else None,
+            pose_tgt_tensor = batch["pose_tgt_tensor"][i],
             bkgd_tgt_tensor = batch["bkgd_tgt_tensor"][i],
             domain_tgt_tensor = batch["domain_tgt_tensor"][i],
             style_tgt_tensor = batch["style_tgt_tensor"][i],
             img_ref_tensor = batch["img_ref_tensor"][i],
             reid_ref_tensor = batch["reid_ref_tensor"][i],
-            pose_ref_tensor = batch["pose_ref_tensor"][i],
             attention_mask = batch["attention_mask"][i],
         )
     print(batch['vis_tgt_tensor'])
@@ -227,9 +257,9 @@ def save_imgs_tensor(dirname, transform, img_tensor, attention_mask=None):
 # just for check
 def save_item_tensor(
     dirname_sample,
-    img_tgt_tensor=None, bkgd_tgt_tensor=None,
+    img_tgt_tensor=None, pose_tgt_tensor=None, bkgd_tgt_tensor=None,
     domain_tgt_tensor=None, style_tgt_tensor=None, 
-    img_ref_tensor=None, reid_ref_tensor=None, pose_ref_tensor=None, attention_mask=None
+    img_ref_tensor=None, reid_ref_tensor=None, attention_mask=None
 ):
     to_pil = transforms.Compose([
         transforms.Normalize(mean=[-1], std=[2]),
@@ -249,6 +279,9 @@ def save_item_tensor(
     if img_tgt_tensor is not None:
         dirname_tgt = os.path.join(dirname_sample, "img_tgt")
         save_imgs_tensor(dirname_tgt, to_pil, img_tgt_tensor)
+    if pose_tgt_tensor is not None:
+        dirname_tgt = os.path.join(dirname_sample, "pose_tgt")
+        save_imgs_tensor(dirname_tgt, to_pil, pose_tgt_tensor)
     if bkgd_tgt_tensor is not None:
         dirname_tgt = os.path.join(dirname_sample, "bkgd_tgt")
         save_imgs_tensor(dirname_tgt, to_pil, bkgd_tgt_tensor)
@@ -264,6 +297,3 @@ def save_item_tensor(
     if reid_ref_tensor is not None:
         dirname_tgt = os.path.join(dirname_sample, "reid_ref")
         save_imgs_tensor(dirname_tgt, to_pil, reid_ref_tensor, attention_mask)
-    if pose_ref_tensor is not None:
-        dirname_tgt = os.path.join(dirname_sample, "pose_ref")
-        save_imgs_tensor(dirname_tgt, to_pil, pose_ref_tensor, attention_mask)

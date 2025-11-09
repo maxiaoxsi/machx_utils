@@ -276,7 +276,7 @@ class Dataset:
         if self._mode in ['random']:
             n_img = random.randint(1, n_max)
         if self._mode in ['views+', 'random']:
-            img_selected = img_selected + self.get_img_selected("images", n_img, jsons_ref)
+            img_selected = img_selected + self.get_img_selected("images", n_img, jsons_ref, personid)
         img_ref_list = []
         pose_ref_list = []
         vis_ref_list = []
